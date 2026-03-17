@@ -20,14 +20,14 @@ export async function POST(req: Request) {
 export async function GET() {
   try {
     await connectDB();
-    
+
     const bills = await getBillsService();
-    
+
     return NextResponse.json(bills);
   } catch (error) {
     console.error("GET Error:", error);
     return NextResponse.json(
-      { error: "Server failed to load bills." }, 
+      { error: "Server failed to load bills." },
       { status: 500 }
     );
   }
