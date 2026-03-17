@@ -1,0 +1,44 @@
+import mongoose from "mongoose"
+
+// This checks if MONGODB_URI exists in your .env file
+// If not — crash early with a clear message
+const MONGODB_URI = process.env.MONGODB_URI as string
+
+if (!MONGODB_URI) {
+  throw new Error("Please define MONGODB_URI in .env.local")
+}
+
+/**
+ * THE WHY?
+ * --------
+ * This is object actually defining the mongoose globally so it should stop nextjs for creating new Database string every time it hit the db.
+ */
+declare global {
+  var mongoose: {
+    conn: mongoose.Connection | null
+    promise: Promise<mongoose.Connection> | null
+  }
+}
+
+let cached = global.mongoose
+
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null }
+}
+
+export async function connectDB() {
+  // Already connected? Return immediately
+  if (cached.conn) {
+    return cached.conn
+  }
+
+  // Connection in progress? Wait for it
+  if (!cached.promise) {
+    cached.promise = mongoose
+      .connect(MONGODB_URI)
+      .then((m) => m.connection)
+  }
+
+  cached.conn = await cached.promise
+  return cached.conn
+}
