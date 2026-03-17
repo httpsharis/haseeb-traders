@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/config/db";
-import { deleteClientService, updateClientService } from "@/services/clientService";
+import { deleteClientService, getSingleClientService, updateClientService } from "@/services/clientService";
 
 export async function PUT(
     req: Request,
@@ -55,5 +55,26 @@ export async function DELETE(req: Request,
         }, {
             status: 400
         })
+    }
+}
+
+export async function GET(
+    _req: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        await connectDB();
+        const { id } = await params;
+
+        const client = await getSingleClientService(id);
+
+        if (!client) {
+            return NextResponse.json({ error: "Client not found" }, { status: 404 });
+        }
+
+        return NextResponse.json(client, { status: 200 });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
