@@ -19,7 +19,7 @@ export async function GET(
 
     return NextResponse.json(invoice, { status: 200 });
   } catch (error) {
-    console.error("GET /api/invoices/[id] error:", error);
+    console.error("GET /api/invoice/[id] error:", error);
     return NextResponse.json(
       { error: "Failed to fetch invoice" },
       { status: 500 }
