@@ -1,10 +1,10 @@
 import mongoose from "mongoose";
-import BillModel from "@/models/billModel";
+import InvoiceModel from "@/models/InvoiceModel";
 import ClientModel from "@/models/clientModel";
-import { CreateBillPayload, IBill } from "@/types";
+import { CreateInvoicePayload, IInvoice } from "@/types";
 
-export async function createBillService(body: CreateBillPayload) {
-    const { clientId, billNumber, date, taxPeriod, status, items } = body;
+export async function createInvoiceService(body: CreateInvoicePayload) {
+    const { clientId, billNumber, date, taxPeriod, status, items, taxes } = body;
 
     if (!clientId || !billNumber || !date || !taxPeriod) {
         throw new Error("Missing required fields.");
@@ -23,34 +23,35 @@ export async function createBillService(body: CreateBillPayload) {
         throw new Error("Client not found in database.");
     }
 
-    return await BillModel.create({
+    return await InvoiceModel.create({
         client: clientId,
         billNumber,
         date,
         taxPeriod,
         status,
         items,
+        taxes
     });
 }
 
-export async function getBillsService() {
-    return await BillModel.find()
+export async function getInvoicesService() {
+    return await InvoiceModel.find()
         .populate("client", "name")
         .sort({ date: -1 });
 }
 
-export async function getSingleBillService(id: string) {
-    return await BillModel.findById(id).populate("client", "name");
+export async function getSingleInvoiceService(id: string) {
+    return await InvoiceModel.findById(id).populate("client", "name");
 }
 
-export async function updateBillService(
+export async function updateInvoiceService(
     id: string,
-    data: Partial<CreateBillPayload>
+    data: Partial<CreateInvoicePayload>
 ) {
     const { clientId, date, ...rest } = data;
 
     // Use a flexible type to prevent TypeScript clashes
-    const updateData: Partial<Omit<IBill, "client">> & { client?: string } = { ...rest };
+    const updateData: Partial<Omit<IInvoice, "client">> & { client?: string } = { ...rest };
 
     if (clientId) {
         if (!mongoose.Types.ObjectId.isValid(clientId)) {
@@ -63,13 +64,13 @@ export async function updateBillService(
         updateData.date = new Date(date);
     }
 
-    return await BillModel.findByIdAndUpdate(
+    return await InvoiceModel.findByIdAndUpdate(
         id,
         updateData,
         { new: true, runValidators: true }
     );
 }
 
-export async function deleteBillService(id: string) {
-    return await BillModel.findByIdAndDelete(id);
+export async function deleteInvoiceService(id: string) {
+    return await InvoiceModel.findByIdAndDelete(id);
 }

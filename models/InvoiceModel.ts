@@ -1,7 +1,26 @@
 import mongoose from "mongoose";
-import { IBill } from "@/types";
+import { IInvoice } from "@/types";
 
-const billItemSchema = new mongoose.Schema({
+const taxChargeSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true
+  },
+  percentage: {
+    type: Number,
+    required: true
+  },
+  baseAmount: {
+    type: Number,
+    required: true
+  },
+  amount: {
+    type: Number,
+    required: true
+  },
+});
+
+const invoiceItemSchema = new mongoose.Schema({
   description: {
     type: String,
     required: true
@@ -12,8 +31,8 @@ const billItemSchema = new mongoose.Schema({
   },
   qty: {
     type: Number,
-    required:
-      true, default: 1
+    required: true,
+    default: 1
   },
   unitPrice: {
     type: Number,
@@ -26,7 +45,7 @@ const billItemSchema = new mongoose.Schema({
   }, // Added GST
 });
 
-const billSchema = new mongoose.Schema({
+const invoiceSchema = new mongoose.Schema({
   client: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Client",
@@ -50,10 +69,11 @@ const billSchema = new mongoose.Schema({
     enum: ["draft", "converted"],
     default: "draft"
   },
-  items: [billItemSchema], // This holds your table rows
+  items: [invoiceItemSchema],
+  taxes: [taxChargeSchema],// This holds your table rows
 }, { timestamps: true });
 
-const BillModel =
-  mongoose.models.Bill || mongoose.model<IBill>("Bill", billSchema);
+const InvoiceModel =
+  mongoose.models.Invoice || mongoose.model<IInvoice>("Invoice", invoiceSchema);
 
-export default BillModel;
+export default InvoiceModel;

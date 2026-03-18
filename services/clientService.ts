@@ -1,5 +1,5 @@
 import ClientModel from "@/models/clientModel";
-import { CreateBillPayload, IClient } from "@/types";
+import { IClient } from "@/types";
 
 export async function updateClientService(id: string, body: Partial<IClient>) {
     return await ClientModel.findByIdAndUpdate(id, body, { new: true });
@@ -13,7 +13,7 @@ export async function getClientsService() {
   return await ClientModel.find({}).sort({ name: 1 });
 }
 
-export async function createClientService(data: CreateBillPayload) {
+export async function createClientService(data: IClient) {
   return await ClientModel.create(data);
 }
 

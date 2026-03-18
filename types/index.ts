@@ -6,8 +6,8 @@ export interface IClient {
   name: string;
 }
 
-// ── Bill Item (New) ─────────────────────────────────────
-export interface IBillItem {
+// ── Invoice Item (New) ─────────────────────────────────────
+export interface IInvoiceItem {
   description: string;
   category: string;
   qty: number;
@@ -15,29 +15,40 @@ export interface IBillItem {
   gstPercentage: number;
 }
 
-// ── Bill ────────────────────────────────────────────────
-export type BillStatus = "draft" | "converted";
+// ── Invoice ────────────────────────────────────────────────
+export type InvoiceStatus = "draft" | "converted";
 
-export interface IBill {
+export interface IInvoice {
   _id: string;
   client: IClient | Types.ObjectId;
   billNumber: string;
   date: Date;
   taxPeriod: string;
-  status: BillStatus;
+  status: string;
+  items: IInvoiceItem[];
+  taxes: ITaxCharge[]; // New line
 }
 
-/** Populated bill — after `.populate("client")` */
-export interface IBillPopulated extends Omit<IBill, "client"> {
+/** Populated invoice — after `.populate("client")` */
+export interface IInvoicePopulated extends Omit<IInvoice, "client"> {
   client: IClient;
 }
 
-/** Payload for POST /api/bills */
-export interface CreateBillPayload {
+// Add this new interface
+export interface ITaxCharge {
+  name: string;
+  percentage: number;
+  baseAmount: number;
+  amount: number;
+}
+
+/** Payload for POST /api/invoices */
+export interface CreateInvoicePayload {
   clientId: string;
   billNumber: string;
   date: string;
   taxPeriod: string;
-  status?: BillStatus;
-  items: IBillItem[];
+  status?: string;
+  items: IInvoiceItem[];
+  taxes: ITaxCharge[]; // New line
 }

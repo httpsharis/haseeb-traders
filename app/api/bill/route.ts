@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/config/db";
-import { createBillService, getBillsService } from "@/services/billService";
+import { createInvoiceService, getInvoicesService } from "@/services/InvoiceService";
 
 export async function POST(req: Request) {
   try {
@@ -8,9 +8,9 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     // The service handles all the hard work now
-    const newBill = await createBillService(body);
+    const newInvoice = await createInvoiceService(body);
 
-    return NextResponse.json(newBill, { status: 201 });
+    return NextResponse.json(newInvoice, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 400 });
@@ -21,13 +21,13 @@ export async function GET() {
   try {
     await connectDB();
 
-    const bills = await getBillsService();
+    const invoices = await getInvoicesService();
 
-    return NextResponse.json(bills);
+    return NextResponse.json(invoices);
   } catch (error) {
     console.error("GET Error:", error);
     return NextResponse.json(
-      { error: "Server failed to load bills." },
+      { error: "Server failed to load invoices." },
       { status: 500 }
     );
   }
