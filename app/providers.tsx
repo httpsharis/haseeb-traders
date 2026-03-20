@@ -1,16 +1,18 @@
 "use client";
 
 import { SessionProvider } from "next-auth/react";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 /**
- * Wraps the app with all client-side providers (e.g. NextAuth session).
+ * Wraps the app with all client-side providers.
  *
- * WHY a separate file?
- * ─ `layout.tsx` is a Server Component by default, but `SessionProvider`
- *   needs the React context API which only works on the client.
- *   Extracting providers into a "use client" boundary keeps layout
- *   server-rendered while still providing session context to every page.
+ * - SessionProvider: NextAuth session context
+ * - TooltipProvider: Required by shadcn sidebar tooltips (collapsed state)
  */
 export default function Providers({ children }: { children: React.ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>;
+  return (
+    <SessionProvider>
+      <TooltipProvider>{children}</TooltipProvider>
+    </SessionProvider>
+  );
 }

@@ -1,28 +1,21 @@
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
+// ── Dashboard Page ──────────────────────────────────────
+// The main dashboard overview. Auth is handled by the parent layout.
+export default function DashboardPage() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground">
+          Welcome to your billing management system.
+        </p>
+      </div>
 
-export default async function DashboardPage() {
-    const session = await getServerSession();
-
-    if (!session) {
-        redirect("/login");
-    }
-
-    return (
-        <div className="min-h-screen bg-background p-8">
-            <div className="mx-auto max-w-4xl space-y-6">
-                <h1 className="text-3xl font-bold text-foreground">
-                    Haseeb Traders Dashboard
-                </h1>
-                <div className="rounded-xl border bg-card p-6 shadow-sm">
-                    <p className="text-lg text-card-foreground">
-                        Welcome back, {session.user?.name}.
-                    </p>
-                    <p className="mt-2 text-muted-foreground">
-                        Your billing system is ready for new invoices.
-                    </p>
-                </div>
-            </div>
-        </div>
-    );
+      <div className="rounded-xl border bg-card p-6 shadow-sm">
+        <p className="text-card-foreground">
+          Your billing system is ready. Use the sidebar to navigate between
+          Summaries, Clients, Tax Types, and Categories.
+        </p>
+      </div>
+    </div>
+  );
 }
