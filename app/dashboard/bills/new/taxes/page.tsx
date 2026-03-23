@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowRight, ArrowLeft, Percent, Eye, Info, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,18 +14,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  StepIndicator,
-  LiveCalculator,
-  useWizard,
-  TaxType,
-  TaxCharge,
-  calculateItemTotal,
-} from "@/components/bills";
+import { StepIndicator, useWizard } from "@/components/bills";
 
-export default function TaxesPage() {
+// Helper to format money
+function formatMoney(amount: number) {
+  return new Intl.NumberFormat("en-PK", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+// Pre-defined taxes based on your design
+const PRESET_TAXES = [
+  { id: "gst", label: "GST (18%)", rate: 18 },
+  { id: "it", label: "IT (Income Tax)", rate: 4.5 },
+  { id: "pst", label: "PST", rate: 5 },
+  { id: "sc", label: "S.C", rate: 2 },
+  { id: "pst_adc", label: "PST ADC", rate: 1 },
+];
+
+export default function TaxesAndReviewPage() {
   const router = useRouter();
-  const { data, updateItem, setDiscount } = useWizard();
+  const { data } = useWizard();
 
   // Redirect if no items
   useEffect(() => {
@@ -33,247 +44,234 @@ export default function TaxesPage() {
     }
   }, [data.clientId, data.items.length, router]);
 
-  // Tax types from DB
-  const [taxTypes, setTaxTypes] = useState<TaxType[]>([]);
-  const [loadingTax, setLoadingTax] = useState(true);
+  const subtotal = data.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
 
-  useEffect(() => {
-    fetch("/api/tax-types")
-      .then((res) => res.json())
-      .then((types) => {
-        setTaxTypes(types.filter((t: TaxType) => t.isActive));
-        setLoadingTax(false);
-      })
-      .catch(() => setLoadingTax(false));
-  }, []);
-
-  // Track which items have which taxes applied
-  // Key: itemId, Value: array of applied tax type _ids with custom base amounts
-  const [itemTaxes, setItemTaxes] = useState<Record<string, Record<string, number>>>(() => {
-    // Initialize from existing data
-    const initial: Record<string, Record<string, number>> = {};
-    data.items.forEach((item) => {
-      initial[item.id] = {};
-      item.taxes.forEach((tax) => {
-        const taxType = taxTypes.find((t) => t.name === tax.name);
-        if (taxType) {
-          initial[item.id][taxType._id] = tax.baseAmount;
-        }
-      });
-    });
-    return initial;
+  // State for active taxes and their custom base amounts
+  const [activeTaxes, setActiveTaxes] = useState<string[]>(["gst"]); // GST on by default
+  const [baseAmounts, setBaseAmounts] = useState<Record<string, number>>({
+    gst: subtotal
   });
 
-  // Toggle tax for an item
-  const toggleTax = (itemId: string, taxTypeId: string) => {
-    setItemTaxes((prev) => {
-      const itemData = prev[itemId] || {};
-      const item = data.items.find((i) => i.id === itemId);
-      const itemTotal = item ? calculateItemTotal(item) : 0;
-
-      if (taxTypeId in itemData) {
-        // Remove tax
-        const { [taxTypeId]: removed, ...rest } = itemData;
-        return { ...prev, [itemId]: rest };
+  // Handle clicking a tax toggle button
+  const toggleTax = (taxId: string) => {
+    setActiveTaxes((prev) => {
+      if (prev.includes(taxId)) {
+        return prev.filter(id => id !== taxId);
       } else {
-        // Add tax with item total as default base
-        return { ...prev, [itemId]: { ...itemData, [taxTypeId]: itemTotal } };
+        // When turning on, set its base amount to the subtotal by default
+        setBaseAmounts(bases => ({ ...bases, [taxId]: subtotal }));
+        return [...prev, taxId];
       }
     });
   };
 
-  // Update base amount for a tax
-  const updateBaseAmount = (itemId: string, taxTypeId: string, baseAmount: number) => {
-    setItemTaxes((prev) => ({
-      ...prev,
-      [itemId]: { ...(prev[itemId] || {}), [taxTypeId]: baseAmount },
-    }));
+  // Handle manually typing a new base amount for a specific tax
+  const handleBaseAmountChange = (taxId: string, value: string) => {
+    const numValue = parseFloat(value) || 0;
+    setBaseAmounts(prev => ({ ...prev, [taxId]: numValue }));
   };
 
-  // Apply taxes to items when moving to next step
-  const applyTaxesToItems = () => {
-    data.items.forEach((item) => {
-      const itemTaxData = itemTaxes[item.id] || {};
-      const newTaxes: TaxCharge[] = [];
+  // Calculate final tax values
+  const calculatedTaxes = activeTaxes.map(taxId => {
+    const taxInfo = PRESET_TAXES.find(t => t.id === taxId);
+    const baseAmount = baseAmounts[taxId] || 0;
+    const taxValue = baseAmount * ((taxInfo?.rate || 0) / 100);
+    return { ...taxInfo, baseAmount, taxValue };
+  });
 
-      Object.entries(itemTaxData).forEach(([taxTypeId, baseAmount]) => {
-        const taxType = taxTypes.find((t) => t._id === taxTypeId);
-        if (taxType && baseAmount > 0) {
-          newTaxes.push({
-            name: taxType.name,
-            percentage: taxType.percentage,
-            baseAmount: baseAmount,
-            amount: Math.round(baseAmount * (taxType.percentage / 100)),
-          });
-        }
-      });
-
-      updateItem(item.id, { taxes: newTaxes });
-    });
-  };
+  const totalTaxAmount = calculatedTaxes.reduce((sum, tax) => sum + tax.taxValue, 0);
+  const grandTotal = subtotal + totalTaxAmount;
 
   const handleNext = () => {
-    applyTaxesToItems();
+    // In a real app, you would save these global taxes to your useWizard context here
     router.push("/dashboard/bills/new/summary");
   };
 
-  const handleAddMoreItems = () => {
-    applyTaxesToItems();
-    router.push("/dashboard/bills/new/items");
-  };
-
-  if (!data.clientId || data.items.length === 0) return null;
+  if (!data.clientId) return null;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">Apply Taxes</h1>
+    <div className="mx-auto max-w-6xl space-y-8">
+      
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Create Invoice</h1>
+        <p className="mt-2 text-muted-foreground">Manage tax configurations and review invoice details.</p>
+      </div>
+
       <StepIndicator currentStep={3} />
 
-      <div className="grid lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-3 space-y-6">
-          {/* Tax Types Legend */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Available Tax Types</CardTitle>
+      <div className="grid gap-8 lg:grid-cols-3">
+        
+        {/* Left Column: Tax Config & Review */}
+        <div className="space-y-6 lg:col-span-2">
+          
+          {/* Tax Configuration Panel */}
+          <Card className="border shadow-sm">
+            <CardHeader className="border-b bg-slate-50/50 pb-4">
+              <div className="flex items-center gap-2">
+                <Percent className="size-5 text-[#ea580c]" />
+                <CardTitle className="text-lg text-slate-800">Tax Configuration</CardTitle>
+              </div>
             </CardHeader>
-            <CardContent>
-              {loadingTax ? (
-                <p className="text-muted-foreground">Loading tax types...</p>
-              ) : taxTypes.length === 0 ? (
-                <p className="text-muted-foreground">No tax types configured.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {taxTypes.map((tax) => (
-                    <span
-                      key={tax._id}
-                      className="px-3 py-1 bg-muted rounded-full text-sm"
+            <CardContent className="p-6 space-y-6">
+              
+              {/* Toggle Buttons */}
+              <div className="flex flex-wrap gap-3">
+                {PRESET_TAXES.map((tax) => {
+                  const isActive = activeTaxes.includes(tax.id);
+                  return (
+                    <button
+                      key={tax.id}
+                      onClick={() => toggleTax(tax.id)}
+                      className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all ${
+                        isActive 
+                          ? "border-[#ea580c] bg-orange-50 text-[#ea580c]" 
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      }`}
                     >
-                      {tax.name} ({tax.percentage}%)
-                    </span>
-                  ))}
+                      {isActive ? <Check className="size-4" /> : <div className="size-4 rounded-full border border-slate-300" />}
+                      {tax.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Custom Base Amount Inputs */}
+              {activeTaxes.length > 0 && (
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                  {activeTaxes.map(taxId => {
+                    const tax = PRESET_TAXES.find(t => t.id === taxId);
+                    return (
+                      <div key={`input-${taxId}`} className="space-y-2">
+                        <label className="text-xs font-semibold text-muted-foreground uppercase">{tax?.label} Base Amount (PKR)</label>
+                        <Input 
+                          type="number" 
+                          value={baseAmounts[taxId] || ""} 
+                          onChange={(e) => handleBaseAmountChange(taxId, e.target.value)}
+                          className="h-11 bg-slate-50/50"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+
             </CardContent>
           </Card>
 
-          {/* Items with Tax Configuration */}
-          {data.items.map((item, idx) => (
-            <Card key={item.id}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex justify-between">
-                  <span>
-                    #{idx + 1} - {item.description}
-                  </span>
-                  <span className="text-muted-foreground">
-                    Base: PKR {calculateItemTotal(item).toLocaleString()}
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* Tax toggles */}
-                  <div className="flex flex-wrap gap-2">
-                    {taxTypes.map((taxType) => {
-                      const isApplied = taxType._id in (itemTaxes[item.id] || {});
-                      return (
-                        <button
-                          key={taxType._id}
-                          onClick={() => toggleTax(item.id, taxType._id)}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            isApplied
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-muted hover:bg-muted/80"
-                          }`}
-                        >
-                          {taxType.name} {taxType.percentage}%
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Base amount inputs for applied taxes */}
-                  {Object.keys(itemTaxes[item.id] || {}).length > 0 && (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Tax</TableHead>
-                          <TableHead>Rate</TableHead>
-                          <TableHead>Base Amount</TableHead>
-                          <TableHead className="text-right">Tax Amount</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {Object.entries(itemTaxes[item.id] || {}).map(([taxTypeId, baseAmount]) => {
-                          const taxType = taxTypes.find((t) => t._id === taxTypeId);
-                          if (!taxType) return null;
-                          const taxAmount = Math.round(baseAmount * (taxType.percentage / 100));
-                          return (
-                            <TableRow key={taxTypeId}>
-                              <TableCell>{taxType.name}</TableCell>
-                              <TableCell>{taxType.percentage}%</TableCell>
-                              <TableCell>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  value={baseAmount}
-                                  onChange={(e) =>
-                                    updateBaseAmount(item.id, taxTypeId, Number(e.target.value))
-                                  }
-                                  className="h-8 w-32"
-                                />
-                              </TableCell>
-                              <TableCell className="text-right font-medium">
-                                PKR {taxAmount.toLocaleString()}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-
-          {/* Discount */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Discount (Optional)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-4">
-                <label className="text-sm">Discount Amount (PKR)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={data.discount || ""}
-                  onChange={(e) => setDiscount(Number(e.target.value))}
-                  className="w-40"
-                  placeholder="0"
-                />
+          {/* Invoice Review Panel */}
+          <Card className="border shadow-sm">
+            <CardHeader className="border-b bg-slate-50/50 pb-4">
+              <div className="flex items-center gap-2">
+                <Eye className="size-5 text-[#ea580c]" />
+                <CardTitle className="text-lg text-slate-800">Invoice Review</CardTitle>
               </div>
+            </CardHeader>
+            <CardContent className="p-6 space-y-8">
+              
+              {/* Client & Info Split */}
+              <div className="grid grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold tracking-widest text-muted-foreground uppercase">Client Details</h3>
+                  <div className="rounded-lg bg-slate-50 p-4">
+                    <p className="font-bold text-slate-900">{data.clientName}</p>
+                    <p className="text-sm text-slate-500 mt-1">Summary #: {data.summaryNumber}</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold tracking-widest text-muted-foreground uppercase">Invoice Information</h3>
+                  <div className="rounded-lg bg-slate-50 p-4 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Tax Period:</span>
+                      <span className="font-medium text-slate-900">{data.taxPeriod}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Issue Date:</span>
+                      <span className="font-medium text-slate-900">{data.date}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Line Items Table */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-bold tracking-widest text-muted-foreground uppercase">Line Items</h3>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Unit Price</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.items.map((item, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="font-medium">{item.description}</TableCell>
+                        <TableCell className="text-right">{item.quantity}</TableCell>
+                        <TableCell className="text-right">{formatMoney(item.unitPrice)}</TableCell>
+                        <TableCell className="text-right font-bold text-slate-700">{formatMoney(item.quantity * item.unitPrice)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
             </CardContent>
           </Card>
 
-          {/* Navigation */}
-          <div className="flex justify-between">
-            <Button variant="outline" onClick={() => router.push("/dashboard/bills/new/items")}>
-              Back
-            </Button>
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={handleAddMoreItems}>
-                + Add More Items
-              </Button>
-              <Button onClick={handleNext}>Next: Summary</Button>
-            </div>
-          </div>
         </div>
 
-        {/* Calculator sidebar */}
-        <div className="lg:col-span-1">
-          <LiveCalculator />
+        {/* Right Column: Settlement Summary */}
+        <div className="space-y-6">
+          <Card className="sticky top-6 border-slate-200 shadow-md">
+            <CardHeader className="border-b bg-slate-50/50 pb-4">
+              <CardTitle className="text-lg">Settlement Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6 p-6">
+              
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Subtotal</span>
+                  <span className="font-bold text-slate-900">{formatMoney(subtotal)}</span>
+                </div>
+                
+                {calculatedTaxes.map((tax, idx) => (
+                  <div key={idx} className="flex justify-between">
+                    <span className="text-slate-600">{tax.label}</span>
+                    <span className="font-medium text-slate-900">{formatMoney(tax.taxValue)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-end justify-between border-t pt-4">
+                <span className="text-lg font-bold text-slate-800">Grand Total</span>
+                <span className="text-2xl font-bold text-[#ea580c]">
+                  PKR {formatMoney(grandTotal)}
+                </span>
+              </div>
+
+              <div className="space-y-3 pt-4">
+                <Button onClick={handleNext} className="h-12 w-full bg-[#ea580c] text-md hover:bg-[#ea580c]/90">
+                  Continue to Finalize <ArrowRight className="ml-2 size-4" />
+                </Button>
+                
+                <Button variant="outline" onClick={() => router.push("/dashboard/bills/new/items")} className="h-12 w-full border-slate-300 text-slate-700">
+                  Back to Items
+                </Button>
+              </div>
+
+            </CardContent>
+          </Card>
+
+          <div className="rounded-lg bg-orange-50/50 border border-orange-100 p-4 flex gap-3 text-xs text-orange-800">
+            <Info className="size-4 shrink-0 mt-0.5 text-[#ea580c]" />
+            <p>Tax calculations are based on the selected toggles. Review base amounts if manual adjustments are required.</p>
+          </div>
+
         </div>
+
       </div>
     </div>
   );

@@ -2,23 +2,23 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Printer, FileText, FileSpreadsheet, CheckCircle2, ArrowLeft, Search, Info, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  StepIndicator,
   useWizard,
   calculateItemTotal,
   calculateItemTaxTotal,
   calculateGrandTotal,
 } from "@/components/bills";
+
+// Helper to format money
+function formatMoney(amount: number) {
+  return new Intl.NumberFormat("en-PK", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
 
 export default function SummaryPage() {
   const router = useRouter();
@@ -43,7 +43,7 @@ export default function SummaryPage() {
   // Group taxes by name for summary
   const taxSummary: Record<string, number> = {};
   data.items.forEach((item) => {
-    item.taxes.forEach((tax) => {
+    item.taxes?.forEach((tax) => {
       taxSummary[tax.name] = (taxSummary[tax.name] || 0) + tax.amount;
     });
   });
@@ -54,7 +54,6 @@ export default function SummaryPage() {
     setError("");
 
     try {
-      // Transform items to bills format
       const bills = data.items.map((item, idx) => ({
         billNumber: item.billNumber || String(idx + 1),
         date: item.date || data.date,
@@ -95,22 +94,17 @@ export default function SummaryPage() {
     setSaving(false);
   };
 
-  // Export to Excel (CSV format for simplicity)
+  // Export to Excel (CSV format)
   const handleExport = () => {
     const rows: string[][] = [];
-
-    // Header info
     rows.push(["Invoice Summary"]);
     rows.push(["Client", data.clientName]);
     rows.push(["Bill #", data.summaryNumber]);
     rows.push(["Date", data.date]);
     rows.push(["Tax Period", data.taxPeriod]);
     rows.push([]);
-
-    // Items header
     rows.push(["#", "Description", "Category", "QTY", "Unit Price", "Amount", "Tax", "Total"]);
 
-    // Items data
     data.items.forEach((item, idx) => {
       const amount = calculateItemTotal(item);
       const tax = calculateItemTaxTotal(item);
@@ -127,16 +121,12 @@ export default function SummaryPage() {
     });
 
     rows.push([]);
-
-    // Tax breakdown
     rows.push(["Tax Breakdown"]);
     Object.entries(taxSummary).forEach(([name, amount]) => {
       rows.push([name, String(amount)]);
     });
 
     rows.push([]);
-
-    // Totals
     rows.push(["Subtotal", String(subtotal)]);
     rows.push(["Total Tax", String(totalTax)]);
     if (data.discount > 0) {
@@ -144,10 +134,7 @@ export default function SummaryPage() {
     }
     rows.push(["Grand Total", String(grandTotal)]);
 
-    // Convert to CSV
     const csv = rows.map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
-
-    // Download
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -157,176 +144,220 @@ export default function SummaryPage() {
     URL.revokeObjectURL(url);
   };
 
-  // Print functionality
   const handlePrint = () => {
     window.print();
-  };
-
-  // Create new bill
-  const handleNewBill = () => {
-    reset();
-    router.push("/dashboard/bills/new");
   };
 
   if (!data.clientId || data.items.length === 0) return null;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 print:p-0">
+    <div className="mx-auto max-w-7xl space-y-8 print:m-0 print:p-0">
+      
+      {/* Header - Hidden on Print */}
       <div className="print:hidden">
-        <StepIndicator currentStep={4} />
+        <h1 className="text-3xl font-bold tracking-tight">Create Invoice (Step 4)</h1>
+        <p className="mt-2 text-muted-foreground">Review your invoice details before finalizing and saving.</p>
+        
+        {/* Simple Progress Bar */}
+        <div className="mt-8 flex items-center justify-between text-sm font-medium">
+          <span className="text-[#ea580c]">Step 4: Preview & Export</span>
+          <span className="text-slate-600">100% Completed</span>
+        </div>
+        <div className="mt-2 flex h-2 w-full gap-2">
+          <div className="h-full flex-1 rounded-full bg-[#ea580c]"></div>
+          <div className="h-full flex-1 rounded-full bg-[#ea580c]"></div>
+          <div className="h-full flex-1 rounded-full bg-[#ea580c]"></div>
+          <div className="h-full flex-1 rounded-full bg-[#ea580c]"></div>
+        </div>
       </div>
 
-      {/* Summary Card */}
-      <Card className="shadow-sm">
-        <CardHeader className="border-b bg-muted/30 flex flex-row items-center justify-between">
-          <CardTitle className="text-xl">Invoice Summary</CardTitle>
-          <div className="flex gap-2 print:hidden">
-            <Button variant="outline" size="sm" onClick={handlePrint}>
-              Print
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleExport}>
-              Export CSV
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          {/* Client & Invoice Info */}
-          <div className="grid sm:grid-cols-2 gap-6 pb-4 border-b">
-            <div>
-              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Client</h3>
-              <p className="text-lg font-medium">{data.clientName}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h3 className="text-sm font-semibold text-muted-foreground mb-1">Bill #</h3>
-                <p className="font-medium">{data.summaryNumber}</p>
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-muted-foreground mb-1">Date</h3>
-                <p className="font-medium">{data.date}</p>
-              </div>
-              <div className="col-span-2">
-                <h3 className="text-sm font-semibold text-muted-foreground mb-1">Tax Period</h3>
-                <p className="font-medium">{data.taxPeriod}</p>
+      <div className="grid gap-8 lg:grid-cols-3 print:block print:w-full">
+        
+        {/* Left Column: Document Preview */}
+        <div className="lg:col-span-2 print:col-span-3">
+          <div className="overflow-hidden rounded-xl border bg-white shadow-sm print:rounded-none print:border-none print:shadow-none">
+            
+            {/* Toolbar - Hidden on Print */}
+            <div className="flex items-center justify-between border-b bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground print:hidden">
+              <span>Document Preview: INV-{data.summaryNumber}</span>
+              <div className="flex items-center gap-2">
+                <Search className="size-3" />
+                <span>100%</span>
               </div>
             </div>
-          </div>
 
-          {/* Line Items */}
-          <div>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-3">Line Items</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">#</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="text-right">QTY</TableHead>
-                  <TableHead className="text-right">Unit Price</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead className="text-right">Tax</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.items.map((item, idx) => (
-                  <TableRow key={item.id}>
-                    <TableCell>{idx + 1}</TableCell>
-                    <TableCell>{item.description}</TableCell>
-                    <TableCell>{item.category}</TableCell>
-                    <TableCell className="text-right">{item.quantity}</TableCell>
-                    <TableCell className="text-right">{item.unitPrice.toLocaleString()}</TableCell>
-                    <TableCell className="text-right">
-                      {calculateItemTotal(item).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {calculateItemTaxTotal(item).toLocaleString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+            {/* Actual Paper Document */}
+            <div className="p-12 print:p-0">
+              
+              {/* Top Section */}
+              <div className="flex justify-between items-start mb-16">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">Haseeb Traders</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Main Business Market<br />
+                    Multan, Pakistan
+                  </p>
+                </div>
+                <div className="text-right">
+                  <h1 className="text-4xl font-light tracking-widest text-slate-300 uppercase">Invoice</h1>
+                  <p className="mt-4 text-sm font-bold text-slate-900"># {data.summaryNumber}</p>
+                  <p className="text-sm text-slate-500">Date: {data.date}</p>
+                </div>
+              </div>
 
-          {/* Tax Breakdown */}
-          {Object.keys(taxSummary).length > 0 && (
-            <div className="pt-4 border-t">
-              <h3 className="text-sm font-semibold text-muted-foreground mb-3">Tax Breakdown</h3>
-              <div className="space-y-2">
-                {Object.entries(taxSummary).map(([name, amount]) => (
-                  <div key={name} className="flex justify-between text-sm">
-                    <span>{name}</span>
-                    <span>PKR {amount.toLocaleString()}</span>
+              {/* Bill To & Payment Info */}
+              <div className="grid grid-cols-2 gap-12 mb-12 text-sm">
+                <div>
+                  <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Bill To</h3>
+                  <p className="font-bold text-slate-900">{data.clientName}</p>
+                  <p className="mt-1 text-slate-500">Tax Period: {data.taxPeriod}</p>
+                </div>
+                <div>
+                  <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Payment Details</h3>
+                  <p className="text-slate-500">Bank: Standard Chartered</p>
+                  <p className="text-slate-500">IBAN: PK34 SCBL 0000 1234 5678 90</p>
+                </div>
+              </div>
+
+              {/* Clean Table */}
+              <table className="w-full text-sm mb-8">
+                <thead>
+                  <tr className="border-b-2 border-slate-900 text-left">
+                    <th className="py-3 font-bold uppercase tracking-wider text-slate-900 text-xs">Description</th>
+                    <th className="py-3 text-right font-bold uppercase tracking-wider text-slate-900 text-xs">Qty</th>
+                    <th className="py-3 text-right font-bold uppercase tracking-wider text-slate-900 text-xs">Unit Price</th>
+                    <th className="py-3 text-right font-bold uppercase tracking-wider text-slate-900 text-xs">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {data.items.map((item, idx) => (
+                    <tr key={idx}>
+                      <td className="py-4 font-medium text-slate-900">
+                        {item.description}
+                        <p className="text-xs text-slate-500 font-normal">{item.category}</p>
+                      </td>
+                      <td className="py-4 text-right text-slate-600">{item.quantity}</td>
+                      <td className="py-4 text-right text-slate-600">{formatMoney(item.unitPrice)}</td>
+                      <td className="py-4 text-right font-bold text-slate-900">{formatMoney(item.quantity * item.unitPrice)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Totals Section */}
+              <div className="flex justify-end">
+                <div className="w-64 space-y-3 text-sm">
+                  <div className="flex justify-between text-slate-600">
+                    <span>Subtotal</span>
+                    <span>{formatMoney(subtotal)}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                  
+                  {Object.entries(taxSummary).map(([name, amount]) => (
+                    <div key={name} className="flex justify-between text-slate-600">
+                      <span>{name}</span>
+                      <span>{formatMoney(amount)}</span>
+                    </div>
+                  ))}
 
-          {/* Totals */}
-          <div className="pt-4 border-t space-y-2">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span>PKR {subtotal.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Tax</span>
-              <span>PKR {totalTax.toLocaleString()}</span>
-            </div>
-            {data.discount > 0 && (
-              <div className="flex justify-between text-red-500">
-                <span>Discount</span>
-                <span>-PKR {data.discount.toLocaleString()}</span>
+                  {data.discount > 0 && (
+                    <div className="flex justify-between text-red-500">
+                      <span>Discount</span>
+                      <span>-{formatMoney(data.discount)}</span>
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-between border-t-2 border-slate-900 pt-3 text-lg font-bold text-[#ea580c]">
+                    <span className="text-slate-900">Total Amount</span>
+                    <span>{formatMoney(grandTotal)}</span>
+                  </div>
+                </div>
               </div>
-            )}
-            <div className="flex justify-between text-lg font-bold pt-2 border-t">
-              <span>Grand Total</span>
-              <span>PKR {grandTotal.toLocaleString()}</span>
+
+              {/* Footer */}
+              <div className="mt-32 flex items-end justify-between border-t border-slate-200 pt-4">
+                <p className="text-xs font-semibold tracking-widest text-slate-300 uppercase">Haseeb Traders | Verified Electronic Document</p>
+                <div className="size-10 bg-slate-100 rounded flex items-center justify-center">
+                   <Search className="size-5 text-slate-300" />
+                </div>
+              </div>
+
             </div>
           </div>
+        </div>
 
-          {/* Error message */}
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
-              {error}
-            </div>
-          )}
+        {/* Right Column: Actions & Summary - Hidden on Print */}
+        <div className="space-y-6 print:hidden">
+          
+          <Card className="border shadow-sm">
+            <CardContent className="p-6 space-y-6">
+              
+              <div className="flex items-center gap-2 text-lg font-bold text-slate-800">
+                <Rocket className="size-5 text-[#ea580c]" />
+                <h3>Actions</h3>
+              </div>
 
-          {/* Success message */}
-          {saved && (
-            <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-600 text-sm">
-              Invoice saved successfully!
-            </div>
-          )}
+              {error && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-md border border-red-200">{error}</div>}
+              {saved && <div className="p-3 bg-green-50 text-green-600 text-sm rounded-md border border-green-200">Invoice saved successfully!</div>}
 
-          {/* Actions */}
-          <div className="flex justify-between pt-4 border-t print:hidden">
-            <Button variant="outline" onClick={() => router.push("/dashboard/bills/new/taxes")}>
-              Back
-            </Button>
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={handleNewBill}>
-                + Create New Bill
-              </Button>
-              {!saved ? (
-                <Button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="bg-orange-500 hover:bg-orange-600"
-                >
-                  {saving ? "Saving..." : "Save Invoice"}
+              <div className="space-y-3">
+                {!saved ? (
+                  <Button onClick={handleSave} disabled={saving} className="w-full h-12 bg-[#ea580c] hover:bg-[#ea580c]/90 text-md font-bold">
+                    <CheckCircle2 className="mr-2 size-5" />
+                    {saving ? "Saving..." : "Finalise & Save"}
+                  </Button>
+                ) : (
+                  <Button onClick={() => router.push("/dashboard")} className="w-full h-12 bg-green-600 hover:bg-green-700 text-md font-bold">
+                    Go to Dashboard
+                  </Button>
+                )}
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <Button variant="outline" onClick={handlePrint} className="h-11 border-slate-200 text-slate-700">
+                    <Printer className="mr-2 size-4" /> Print
+                  </Button>
+                  <Button variant="outline" onClick={handleExport} className="h-11 border-slate-200 text-slate-700">
+                    <FileSpreadsheet className="mr-2 size-4" /> Export CSV
+                  </Button>
+                </div>
+
+                <Button variant="outline" onClick={() => router.push("/dashboard/bills/new")} className="w-full h-11 border-slate-200 text-slate-700">
+                  <FileText className="mr-2 size-4" /> Save as Draft / New
                 </Button>
-              ) : (
-                <Button
-                  onClick={() => router.push("/dashboard")}
-                  className="bg-green-500 hover:bg-green-600"
-                >
-                  Go to Dashboard
-                </Button>
-              )}
-            </div>
+              </div>
+
+              <div className="pt-6 border-t space-y-4">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Summary</h3>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between border-b pb-2">
+                    <span className="text-slate-500">Recipient</span>
+                    <span className="font-bold text-slate-900">{data.clientName}</span>
+                  </div>
+                  <div className="flex justify-between border-b pb-2">
+                    <span className="text-slate-500">Total Items</span>
+                    <span className="font-bold text-slate-900">{data.items.length} Lines</span>
+                  </div>
+                  <div className="flex justify-between pb-2">
+                    <span className="text-slate-500">Currency</span>
+                    <span className="font-bold text-slate-900">PKR (Rs)</span>
+                  </div>
+                </div>
+              </div>
+
+            </CardContent>
+          </Card>
+
+          <button onClick={() => router.push("/dashboard/bills/new/taxes")} className="flex items-center text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">
+            <ArrowLeft className="mr-2 size-4" /> Back to Taxes & Adjustments
+          </button>
+
+          <div className="rounded-lg bg-orange-50/50 border border-orange-100 p-4 flex gap-3 text-sm text-orange-800">
+            <Info className="size-5 shrink-0 mt-0.5 text-[#ea580c]" />
+            <p>Once finalized, this invoice will be assigned a permanent status and can be tracked in your dashboard.</p>
           </div>
-        </CardContent>
-      </Card>
+
+        </div>
+
+      </div>
     </div>
   );
 }
