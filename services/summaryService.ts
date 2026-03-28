@@ -1,9 +1,9 @@
 import mongoose from "mongoose";
-import SummaryModel from "@/models/SummaryModel";
+import SummaryModel from "@/models/summaryModel";
 import BillModel from "@/models/billModel";
 import ClientModel from "@/models/clientModel";
 import { CreateSummaryPayload, IBill, ISummary } from "@/types";
-import { deleteBillsBySummaryService } from "./BillService";
+import { deleteBillsBySummaryService } from "./billService";
 
 // ── Query params interface for search/filter/pagination ─
 export interface SummaryQueryParams {

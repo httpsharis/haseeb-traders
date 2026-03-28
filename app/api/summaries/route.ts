@@ -3,7 +3,7 @@ import { connectDB } from "@/config/db";
 import {
   createSummaryService,
   getSummariesService,
-} from "@/services/SummaryService";
+} from "@/services/summaryService";
 
 // ── GET /api/summaries ──────────────────────────────────
 // Returns paginated summaries with search, filter, and date range support.

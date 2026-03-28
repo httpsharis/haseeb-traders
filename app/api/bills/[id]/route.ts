@@ -4,7 +4,7 @@ import {
   deleteBillService,
   getSingleBillService,
   updateBillService,
-} from "@/services/BillService";
+} from "@/services/billService";
 
 // ── GET /api/bills/:id ──────────────────────────────────
 // Returns a single bill by its ID.

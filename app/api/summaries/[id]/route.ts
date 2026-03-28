@@ -4,7 +4,7 @@ import {
   deleteSummaryService,
   getSingleSummaryService,
   updateSummaryService,
-} from "@/services/SummaryService";
+} from "@/services/summaryService";
 
 // ── GET /api/summaries/:id ──────────────────────────────
 // Returns a single summary with its populated client and all linked bills.

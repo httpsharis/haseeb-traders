@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/config/db";
-import { updateTaxTypeService, deleteTaxTypeService } from "@/services/TaxTypeService";
+import { updateTaxTypeService, deleteTaxTypeService } from "@/services/taxTypeService";
 
 // ── PUT /api/tax-types/:id ──────────────────────────────
 // Updates a tax type (e.g. change GST from 18% to 17%).

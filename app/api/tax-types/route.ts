@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/config/db";
-import { createTaxTypeService, getTaxTypesService } from "@/services/TaxTypeService";
+import { createTaxTypeService, getTaxTypesService } from "@/services/taxTypeService";
 
 // ── GET /api/tax-types ──────────────────────────────────
 // Returns all tax types (active and inactive).

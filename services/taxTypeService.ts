@@ -1,4 +1,4 @@
-import TaxTypeModel from "@/models/TaxTypeModel";
+import TaxTypeModel from "@/models/taxTypeModel";
 import { ITaxType } from "@/types";
 
 // ── Get all tax types ───────────────────────────────────

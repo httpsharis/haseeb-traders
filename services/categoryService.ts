@@ -1,4 +1,4 @@
-import CategoryModel from "@/models/CategoryModel";
+import CategoryModel from "@/models/categoryModel";
 import { ICategory } from "@/types";
 
 // ── Get all categories ──────────────────────────────────

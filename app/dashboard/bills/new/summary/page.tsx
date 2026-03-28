@@ -303,7 +303,7 @@ export default function SummaryPage() {
                 {!saved ? (
                   <Button onClick={handleSave} disabled={saving} className="w-full h-12 bg-[#ea580c] hover:bg-[#ea580c]/90 text-md font-bold">
                     <CheckCircle2 className="mr-2 size-5" />
-                    {saving ? "Saving..." : "Finalise & Save"}
+                    {saving ? "Saving..." : "Finalize & Save"}
                   </Button>
                 ) : (
                   <Button onClick={() => router.push("/dashboard")} className="w-full h-12 bg-green-600 hover:bg-green-700 text-md font-bold">

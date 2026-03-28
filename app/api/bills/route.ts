@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/config/db";
-import { getBillsBySummaryService } from "@/services/BillService";
+import { getBillsBySummaryService } from "@/services/billService";
 
 // ── GET /api/bills?summaryId=xxx ────────────────────────
 // Returns all bills for a given summary.

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/config/db";
-import { createCategoryService, getCategoriesService } from "@/services/CategoryService";
+import { createCategoryService, getCategoriesService } from "@/services/categoryService";
 
 // ── GET /api/categories ─────────────────────────────────
 // Returns all categories for the bill form dropdown.

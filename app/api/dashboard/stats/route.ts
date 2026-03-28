@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/config/db";
 import { rateLimits } from "@/lib/rateLimit";
-import SummaryModel from "@/models/SummaryModel";
+import SummaryModel from "@/models/summaryModel";
 import BillModel from "@/models/billModel";
 
 /**

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/config/db";
-import { updateCategoryService, deleteCategoryService } from "@/services/CategoryService";
+import { updateCategoryService, deleteCategoryService } from "@/services/categoryService";
 
 // ── PUT /api/categories/:id ─────────────────────────────
 // Updates a category (e.g. rename or toggle active status).
