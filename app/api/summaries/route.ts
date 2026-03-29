@@ -46,13 +46,11 @@ export async function POST(req: Request) {
   try {
     await connectDB();
     const body = await req.json();
-    console.log("POST /api/summaries - Body received:", JSON.stringify(body, null, 2));
 
     const newSummary = await createSummaryService(body);
     return NextResponse.json(newSummary, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.log("POST /api/summaries - Error:", message);
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

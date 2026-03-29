@@ -55,7 +55,7 @@ export default function SummaryPage() {
 
     try {
       const bills = data.items.map((item, idx) => ({
-        billNumber: item.billNumber || String(idx + 1),
+        billNumber: item.billNumber || `${data.summaryNumber}-${idx + 1}`,
         date: item.date || data.date,
         description: item.description,
         category: item.category,

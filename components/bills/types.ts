@@ -30,6 +30,8 @@ export interface WizardData {
   date: string;
   // Step 2 & 3: Line items with taxes
   items: LineItem[];
+  // Summary-level taxes (persisted from taxes step)
+  summaryTaxes: TaxCharge[];
   // Summary level
   discount: number;
   commission: number;

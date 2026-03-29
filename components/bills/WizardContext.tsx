@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, ReactNode } from "react";
-import { WizardData, LineItem } from "./types";
+import { WizardData, LineItem, TaxCharge } from "./types";
 
 interface WizardContextType {
   data: WizardData;
@@ -11,6 +11,8 @@ interface WizardContextType {
   removeItem: (id: string) => void;
   setDiscount: (val: number) => void;
   setCommission: (val: number) => void;
+  setSummaryTaxes: (taxes: TaxCharge[]) => void;
+  applyTaxesToItems: (taxes: TaxCharge[]) => void;
   reset: () => void;
 }
 
@@ -21,6 +23,7 @@ const defaultData: WizardData = {
   taxPeriod: "",
   date: new Date().toISOString().split("T")[0],
   items: [],
+  summaryTaxes: [],
   discount: 0,
   commission: 0,
 };
@@ -52,11 +55,40 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   const setDiscount = (val: number) => setData((prev) => ({ ...prev, discount: val }));
   const setCommission = (val: number) => setData((prev) => ({ ...prev, commission: val }));
 
+  // Save summary-level tax selections
+  const setSummaryTaxes = (taxes: TaxCharge[]) => {
+    setData((prev) => ({ ...prev, summaryTaxes: taxes }));
+  };
+
+  // Distribute summary-level taxes proportionally to each line item
+  const applyTaxesToItems = (taxes: TaxCharge[]) => {
+    setData((prev) => {
+      const subtotal = prev.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+      if (subtotal === 0) return prev;
+
+      const updatedItems = prev.items.map((item) => {
+        const itemAmount = item.quantity * item.unitPrice;
+        const proportion = itemAmount / subtotal;
+
+        const itemTaxes: TaxCharge[] = taxes.map((tax) => ({
+          name: tax.name,
+          percentage: tax.percentage,
+          baseAmount: tax.baseAmount * proportion,
+          amount: tax.amount * proportion,
+        }));
+
+        return { ...item, taxes: itemTaxes };
+      });
+
+      return { ...prev, items: updatedItems, summaryTaxes: taxes };
+    });
+  };
+
   const reset = () => setData(defaultData);
 
   return (
     <WizardContext.Provider
-      value={{ data, setClientInfo, addItem, updateItem, removeItem, setDiscount, setCommission, reset }}
+      value={{ data, setClientInfo, addItem, updateItem, removeItem, setDiscount, setCommission, setSummaryTaxes, applyTaxesToItems, reset }}
     >
       {children}
     </WizardContext.Provider>
