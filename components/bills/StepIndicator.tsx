@@ -8,8 +8,7 @@ interface Step {
 const steps: Step[] = [
   { number: 1, title: "Client Details" },
   { number: 2, title: "Item Details" },
-  { number: 3, title: "Tax & Discounts" },
-  { number: 4, title: "Review" },
+  { number: 3, title: "Review" },
 ];
 
 export function StepIndicator({ currentStep }: { currentStep: number }) {

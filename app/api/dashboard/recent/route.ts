@@ -27,67 +27,64 @@ export async function GET(request: Request) {
 
     // Parse separate pagination params for bills and summaries
     const { searchParams } = new URL(request.url);
-    const billsPage = Math.max(1, parseInt(searchParams.get("billsPage") || "1", 10));
-    const summariesPage = Math.max(1, parseInt(searchParams.get("summariesPage") || "1", 10));
-    const limit = Math.min(20, Math.max(1, parseInt(searchParams.get("limit") || "5", 10)));
+    // Calculate pagination for Invoices (Summaries)
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limit = Math.min(20, Math.max(1, parseInt(searchParams.get("limit") || "10", 10)));
+    const skip = (page - 1) * limit;
 
-    const billsSkip = (billsPage - 1) * limit;
-    const summariesSkip = (summariesPage - 1) * limit;
-
-    // Fetch data with separate pagination in parallel
-    const [recentBills, recentSummaries, totalBills, totalSummaries] = await Promise.all([
-      // Get paginated bills
-      BillModel.find()
-        .sort({ createdAt: -1 })
-        .skip(billsSkip)
-        .limit(limit)
-        .populate({
-          path: "summary",
-          select: "_id client",
-          populate: {
-            path: "client",
-            select: "name",
-          },
-        })
-        .lean(),
-
-      // Get paginated summaries
-      SummaryModel.find()
-        .sort({ createdAt: -1 })
-        .skip(summariesSkip)
-        .limit(limit)
-        .populate("client", "name")
-        .lean(),
-
-      // Get total counts
-      BillModel.countDocuments(),
+    const [recentSummaries, totalSummaries] = await Promise.all([
+      SummaryModel.aggregate([
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        { // Join with clients to get the client name
+          $lookup: {
+            from: "clients",
+            localField: "client",
+            foreignField: "_id",
+            as: "clientDetails"
+          }
+        },
+        { $unwind: { path: "$clientDetails", preserveNullAndEmptyArrays: true } },
+        { // Join with bills to calculate the sum
+          $lookup: {
+            from: "bills",
+            localField: "_id",
+            foreignField: "summary",
+            as: "bills"
+          }
+        },
+        { // Calculate total amount by multiplying quantity and unitPrice for each bill, then summing
+          $addFields: {
+            clientName: "$clientDetails.name",
+            totalAmount: {
+              $sum: {
+                $map: {
+                  input: "$bills",
+                  as: "b",
+                  in: { $multiply: ["$$b.quantity", "$$b.unitPrice"] }
+                }
+              }
+            }
+          }
+        },
+        { // Exclude unneeded bulk data
+          $project: {
+            bills: 0,
+            clientDetails: 0
+          }
+        }
+      ]),
       SummaryModel.countDocuments(),
     ]);
 
-    // Calculate bill counts for displayed summaries
-    const summaryIds = recentSummaries.map((s) => s._id);
-    const billCountsArray = await BillModel.aggregate([
-      { $match: { summary: { $in: summaryIds } } },
-      { $group: { _id: "$summary", count: { $sum: 1 } } },
-    ]);
-
-    const billCounts: Record<string, number> = {};
-    billCountsArray.forEach((item) => {
-      billCounts[item._id.toString()] = item.count;
-    });
-
     return NextResponse.json({
-      bills: recentBills,
       summaries: recentSummaries,
-      billCounts,
       pagination: {
-        billsPage,
-        summariesPage,
+        page,
         limit,
-        totalBills,
         totalSummaries,
-        totalBillPages: Math.ceil(totalBills / limit),
-        totalSummaryPages: Math.ceil(totalSummaries / limit),
+        totalPages: Math.ceil(totalSummaries / limit),
       },
     });
   } catch (error) {

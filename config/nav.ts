@@ -28,7 +28,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Front Desk",
     items: [
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-      { title: "Create Bill", url: "/dashboard/bills/new", icon: FilePlus },
+      { title: "Create Invoice", url: "/dashboard/bills/new", icon: FilePlus },
       { title: "Clients", url: "/dashboard/clients", icon: Users },
     ],
   },

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode, Dispatch, SetStateAction } from "react";
 import { WizardData, LineItem, TaxCharge } from "./types";
 
 interface WizardContextType {
@@ -14,6 +14,7 @@ interface WizardContextType {
   setSummaryTaxes: (taxes: TaxCharge[]) => void;
   applyTaxesToItems: (taxes: TaxCharge[]) => void;
   reset: () => void;
+  setData: Dispatch<SetStateAction<WizardData>>;
 }
 
 const defaultData: WizardData = {
@@ -88,7 +89,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
 
   return (
     <WizardContext.Provider
-      value={{ data, setClientInfo, addItem, updateItem, removeItem, setDiscount, setCommission, setSummaryTaxes, applyTaxesToItems, reset }}
+      value={{ data, setClientInfo, addItem, updateItem, removeItem, setDiscount, setCommission, setSummaryTaxes, applyTaxesToItems, reset, setData }}
     >
       {children}
     </WizardContext.Provider>
