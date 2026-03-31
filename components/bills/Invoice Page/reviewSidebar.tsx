@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Printer, Download, ArrowLeft, Info, Loader2 } from "lucide-react";
+import { CheckCircle2, Printer, Download, Info, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWizard } from "@/components/bills";
 
@@ -29,11 +29,12 @@ export function ReviewSidebar() {
             }));
 
             const payload = {
+                _id: data._id,
                 client: data.clientId,
                 summaryNumber: data.summaryNumber,
                 date: data.date,
                 taxPeriod: data.taxPeriod,
-                status: "Draft", // Always saved as Draft first
+                status: "Draft", 
                 discount: data.discount || 0,
                 commission: data.commission || 0,
                 bills,
@@ -54,9 +55,9 @@ export function ReviewSidebar() {
             setTimeout(() => {
                 router.push("/dashboard");
             }, 1000);
-        } catch (err: any) {
+        } catch (err) {
             console.error(err);
-            setError(err.message || "Failed to save to database");
+            setError(err instanceof Error ? err.message : "Failed to save to database");
         } finally {
             setIsSaving(false);
         }

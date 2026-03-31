@@ -23,6 +23,7 @@ export interface LineItem {
 
 export interface WizardData {
   // Step 1: Client
+  _id?: string;
   clientId: string;
   clientName: string;
   summaryNumber: string;
