@@ -17,46 +17,70 @@ export function ReviewSidebar() {
         setIsSaving(true);
         setError("");
 
+        // DEBUG 1: See exactly what the wizard is trying to save
+        console.log("FINALIZING INVOICE - DATA STATE:", data); 
+
+        if (!data || !data.items || data.items.length === 0) {
+            setError("No items found to save! Did you add items to the invoice?");
+            setIsSaving(false);
+            return;
+        }
+
         try {
-            const bills = data.items.map((item, idx) => ({
-                billNumber: item.billNumber || `${data.summaryNumber}-${idx + 1}`,
-                date: item.date || data.date,
-                description: item.description,
-                category: item.category,
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-                taxes: item.taxes,
-            }));
+            const savePromises = data.items.map(async (item: {
+                billNumber?: string;
+                date?: string;
+                description?: string;
+                category?: string;
+                quantity?: number;
+                unitPrice?: number;
+                taxes?: { amount: number }[];
+            }, idx: number) => {
+                
+                const baseAmount = (item.quantity || 1) * (item.unitPrice || 0);
+                const taxAmount = item.taxes ? item.taxes.reduce((sum: number, t: { amount: number }) => sum + (t.amount || 0), 0) : 0;
+                
+                const billPayload = {
+                    client: data.clientId, 
+                    billNumber: item.billNumber || `${data.summaryNumber || 'INV'}-${idx + 1}`,
+                    date: item.date || data.date || new Date(),
+                    description: item.description || "Item",
+                    category: item.category || "General",
+                    quantity: item.quantity || 1,
+                    unitPrice: item.unitPrice || 0,
+                    baseAmount: baseAmount,
+                    taxAmount: taxAmount,
+                    amount: baseAmount + taxAmount,
+                    taxes: item.taxes || [],
+                };
 
-            const payload = {
-                _id: data._id,
-                client: data.clientId,
-                summaryNumber: data.summaryNumber,
-                date: data.date,
-                taxPeriod: data.taxPeriod,
-                status: "Draft", 
-                discount: data.discount || 0,
-                commission: data.commission || 0,
-                bills,
-            };
+                // DEBUG 2: See the exact payload going to the database
+                console.log(`Sending Payload for item ${idx}:`, billPayload); 
 
-            const res = await fetch("/api/summaries", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
+                const res = await fetch("/api/bills", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(billPayload),
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    // DEBUG 3: If the database rejects it, find out why
+                    console.error("BACKEND REJECTED BILL:", err); 
+                    throw new Error(err.error || "Failed to save bill");
+                }
             });
 
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.error || "Failed to save invoice");
-            }
+            await Promise.all(savePromises);
 
             setIsSuccess(true);
             setTimeout(() => {
-                router.push("/dashboard");
+                // Redirect directly to your inbox based on your screenshot!
+                router.push("/dashboard/pending-bills"); 
             }, 1000);
-        } catch (err) {
-            console.error(err);
+
+        } catch (err: unknown) {
+            console.error("CATCH BLOCK TRIGGERED:", err);
             setError(err instanceof Error ? err.message : "Failed to save to database");
         } finally {
             setIsSaving(false);
@@ -110,11 +134,11 @@ export function ReviewSidebar() {
                 <div className="divide-y divide-slate-100">
                     <div className="flex justify-between items-center p-4">
                         <span className="text-sm font-medium text-slate-500">Recipient</span>
-                        <span className="text-sm font-bold text-slate-900">{data.clientName}</span>
+                        <span className="text-sm font-bold text-slate-900">{data?.clientName || "Unknown"}</span>
                     </div>
                     <div className="flex justify-between items-center p-4">
                         <span className="text-sm font-medium text-slate-500">Total Items</span>
-                        <span className="text-sm font-bold text-slate-900">{data.items.length} Items</span>
+                        <span className="text-sm font-bold text-slate-900">{data?.items?.length || 0} Items</span>
                     </div>
                     <div className="flex justify-between items-center p-4">
                         <span className="text-sm font-medium text-slate-500">Currency</span>
@@ -126,7 +150,7 @@ export function ReviewSidebar() {
             <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 flex items-start gap-3">
                 <Info className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
                 <p className="text-xs font-medium text-orange-800 leading-relaxed">
-                    Once finalized, this invoice will be assigned a permanent status and can be tracked in your dashboard.
+                    Once finalized, this invoice will be sent to the Pending Bills inbox for review.
                 </p>
             </div>
         </div>
