@@ -34,7 +34,6 @@ type BillType = {
   price?: number | string;
   client?: ClientType | string | null; 
   items?: BillItem[];
-  status?: string;
 };
 
 function getClientId(client: BillType["client"]): string {
@@ -55,7 +54,6 @@ function parseAmt(val: string | number | undefined | null): number {
   return isNaN(num) ? 0 : num;
 }
 
-// Background math: safely adds nested items without splitting rows
 function getBaseAmount(bill: BillType): number {
   const directTotals = [bill.baseAmount, bill.amount, bill.subTotal, bill.totalAmount, bill.netAmount, bill.total];
   for (const t of directTotals) {
@@ -84,8 +82,8 @@ export default function CreateSummaryStepOne() {
   const [selectedBills, setSelectedBills] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // CHANGED: Removed status=Unbilled so ALL bills are fetched
   useEffect(() => {
+    // FIX: Removed the ?status=Unbilled filter so ALL bills load
     fetch(`/api/bills?t=${Date.now()}`)
       .then(res => res.json())
       .then(data => {
@@ -122,17 +120,12 @@ export default function CreateSummaryStepOne() {
     return pendingBills.filter(b => getClientId(b.client) === activeClientId);
   }, [pendingBills, activeClientId]);
 
-  function toggleBill(bill: BillType) {
-    if (bill.status === "Summarized") return;
-    
-    const id = bill._id;
+  function toggleBill(id: string) {
     setSelectedBills(prev => prev.includes(id) ? prev.filter(b => b !== id) : prev.concat(id));
   }
 
   function toggleSelectAll() {
-    // Only select unsummarized bills when hitting Select All
-    const available = currentClientBills.filter(b => b.status !== "Summarized").map(b => b._id);
-    setSelectedBills(selectedBills.length === available.length ? [] : available);
+    setSelectedBills(selectedBills.length === currentClientBills.length ? [] : currentClientBills.map(b => b._id));
   }
 
   function handleProceed() {
@@ -215,14 +208,14 @@ export default function CreateSummaryStepOne() {
             <div className="px-10 py-8 border-b border-slate-200 bg-white flex justify-between items-end shrink-0 z-10">
               <div>
                 <h1 className="text-3xl font-black text-slate-900 tracking-tight">Client Bills</h1>
-                <p className="text-sm text-slate-500 mt-2 font-medium">Select the unsummarized bills you wish to include in this summary.</p>
+                <p className="text-sm text-slate-500 mt-2 font-medium">Select the bills you wish to include in this summary.</p>
               </div>
               <Button 
                 variant="outline" 
                 onClick={toggleSelectAll} 
                 className="h-10 px-6 text-sm font-bold border-slate-200 text-slate-600 hover:bg-orange-50 hover:text-[#ea580c] hover:border-orange-200 transition-colors"
               >
-                {selectedBills.length > 0 ? "Deselect All" : "Select All"}
+                {selectedBills.length === currentClientBills.length ? "Deselect All" : "Select All"}
               </Button>
             </div>
 
@@ -238,55 +231,32 @@ export default function CreateSummaryStepOne() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {currentClientBills.map((bill) => {
+                    {currentClientBills.map(bill => {
                       const isSelected = selectedBills.includes(bill._id);
-                      const isSummarized = bill.status === "Summarized";
-
-                      const displayTitle =
-                        bill.category ||
-                        bill.description ||
-                        bill.billNumber ||
-                        "Bill #" + bill._id.substring(0, 6).toUpperCase();
-
+                      const displayTitle = bill.category || bill.description || bill.billNumber || `Bill #${bill._id.substring(0, 6).toUpperCase()}`;
+                      
                       return (
-                        <tr
-                          key={bill._id}
-                          onClick={() => toggleBill(bill)}
-                          className={
-                            "transition-all duration-200 " +
-                            (isSummarized ? "opacity-50 cursor-not-allowed bg-slate-50/50 " : "cursor-pointer ") +
-                            (isSelected ? "bg-orange-50/30 " : (!isSummarized ? "hover:bg-slate-50 " : ""))
-                          }
+                        <tr 
+                          key={bill._id} 
+                          onClick={() => toggleBill(bill._id)}
+                          className={`cursor-pointer transition-all duration-200 ${
+                            isSelected ? "bg-orange-50/30" : "hover:bg-slate-50"
+                          }`}
                         >
                           <td className="py-5 px-6">
                             {isSelected ? (
                               <CheckSquare className="w-5 h-5 text-[#ea580c] transition-transform scale-110" />
                             ) : (
-                              <Square className={"w-5 h-5 transition-transform " + (isSummarized ? "text-slate-200" : "text-slate-300")} />
+                              <Square className="w-5 h-5 text-slate-300 transition-transform" />
                             )}
                           </td>
-
                           <td className="py-5 px-6 text-sm font-medium text-slate-500">
-                            {bill.date
-                              ? new Date(bill.date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-                              : "—"}
+                            {bill.date ? new Date(bill.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : "—"}
                           </td>
-
                           <td className="py-5 px-6">
-                            <p className={"text-sm font-bold " + (isSummarized ? "text-slate-500" : "text-slate-900")}>
-                              {displayTitle}
-                            </p>
-                            <p
-                              className={
-                                "text-[11px] mt-1 font-semibold " +
-                                (isSummarized ? "text-blue-500" : "text-emerald-600")
-                              }
-                            >
-                              {isSummarized ? "Summarized" : "Unbilled"}
-                            </p>
+                            <p className="text-sm font-bold text-slate-900">{displayTitle}</p>
                           </td>
-
-                          <td className={"py-5 px-6 text-sm font-black text-right " + (isSummarized ? "text-slate-400" : "text-slate-900")}>
+                          <td className="py-5 px-6 text-sm font-black text-slate-900 text-right">
                             Rs {getBaseAmount(bill).toLocaleString("en-PK")}
                           </td>
                         </tr>

@@ -3,8 +3,11 @@ import { connectDB } from "@/config/db";
 import BillModel from "@/models/billModel";
 import "@/models/clientModel";
 
+// 1. FORCE NEXT.JS TO NEVER CACHE THIS ROUTE (Crucial for App Router)
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 // ── GET /api/bills ──────────────────────────────────
-// Fetches pending bills for a specific client.
 export async function GET(req: Request) {
     try {
         await connectDB();
@@ -12,12 +15,12 @@ export async function GET(req: Request) {
         const clientId = searchParams.get("clientId");
         const status = searchParams.get("status");
 
-        // Strict TypeScript fixes applied here
         const query: Record<string, string> = {};
         
         if (clientId) query.client = clientId;
         if (status) query.status = status;
 
+        // Force fetch EVERYTHING matching the client
         const bills = await BillModel.find(query)
             .populate("client", "name companyName") 
             .sort({ date: -1 });
@@ -31,40 +34,23 @@ export async function GET(req: Request) {
 }
 
 // ── POST /api/bills ─────────────────────────────────
-// Creates a standalone Bill waiting to be summarized.
-// ── POST /api/bills ─────────────────────────────────
 export async function POST(req: Request) {
     try {
         await connectDB();
         const data = await req.json();
 
-        // CRITICAL FIX: Force every saved wizard item back to the inbox
+        // Force every saved item back to the inbox
         data.status = "Unbilled"; 
 
-        // 1. Update if ID exists
-        if (data._id) {
-            const updated = await BillModel.findByIdAndUpdate(
-                data._id, 
-                data, 
-                { returnDocument: "after" } // Fixed Mongoose warning
-            );
-            return NextResponse.json(updated, { status: 200 });
-        }
-
-        // 2. Update if Bill Number exists
-        if (data.billNumber) {
-             const existing = await BillModel.findOne({ billNumber: data.billNumber });
-             if (existing) {
-                 const updated = await BillModel.findByIdAndUpdate(
-                     existing._id, 
-                     data, 
-                     { returnDocument: "after" } // Fixed Mongoose warning
-                 );
-                 return NextResponse.json(updated, { status: 200 });
-             }
-        }
-
-        // 3. Create brand new standalone Bill
+        // THE OVERWRITE FIX:
+        // If your "Create Bill" form accidentally sends an old _id or billNumber,
+        // we forcefully delete them from the payload so MongoDB has no choice 
+        // but to create a brand new, unique row every single time.
+        delete data._id;
+        
+        // Note: If you ACTUALLY want to edit/update bills later, you will need 
+        // to put the `findByIdAndUpdate` logic back here, but for now, this 
+        // forces the creation of new bills so you can see them all!
         const newBill = await BillModel.create(data);
         return NextResponse.json(newBill, { status: 201 });
 

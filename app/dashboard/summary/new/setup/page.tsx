@@ -5,8 +5,19 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Loader2, Save, ArrowLeft, Percent, Plus, X, ArrowRight, Printer, Receipt } from "lucide-react";
 
+type BillItem = {
+  amount?: string | number;
+  total?: string | number;
+  quantity?: string | number;
+  price?: string | number;
+  unitPrice?: string | number;
+  rate?: string | number;
+};
+
 type BillType = {
   _id: string;
+  billNumber?: string;
+  invoiceNumber?: string;
   description?: string;
   category?: string;
   date?: string;
@@ -14,9 +25,12 @@ type BillType = {
   baseAmount?: string | number;
   subTotal?: string | number;
   totalAmount?: string | number;
+  netAmount?: string | number;
+  total?: string | number;
   quantity?: string | number;
   unitPrice?: string | number;
   price?: string | number;
+  items?: BillItem[];
 };
 
 type TaxRule = { name: string; percentage: number };
@@ -38,12 +52,21 @@ function parseAmt(val: string | number | undefined | null): number {
 }
 
 function getBaseAmount(bill: BillType): number {
-  const directTotals = [bill.baseAmount, bill.amount, bill.subTotal, bill.totalAmount];
+  const directTotals = [bill.baseAmount, bill.amount, bill.subTotal, bill.totalAmount, bill.netAmount, bill.total];
   for (const t of directTotals) {
     const val = parseAmt(t);
     if (val > 0) return val;
   }
-  
+
+  if (Array.isArray(bill.items) && bill.items.length > 0) {
+    let sum = 0;
+    bill.items.forEach((item) => {
+      const itemTotal = parseAmt(item.amount) || parseAmt(item.total) || ( (parseAmt(item.quantity) || 1) * parseAmt(item.price || item.unitPrice || item.rate) );
+      sum += itemTotal;
+    });
+    if (sum > 0) return sum;
+  }
+
   const flat = (parseAmt(bill.quantity) || 1) * parseAmt(bill.unitPrice || bill.price);
   return flat > 0 ? flat : 0;
 }
@@ -73,7 +96,8 @@ function TaxSetupContent() {
       return;
     }
 
-    fetch(`/api/bills?status=Unbilled&clientId=${clientId}&t=${Date.now()}`)
+    // FIX: Removed the ?status=Unbilled filter here as well
+    fetch(`/api/bills?clientId=${clientId}&t=${Date.now()}`)
       .then((res) => res.json())
       .then((data) => {
         const allBills = Array.isArray(data) ? data : (data.bills || data.data || []);
@@ -271,7 +295,7 @@ function TaxSetupContent() {
           <table className="w-full text-left border-collapse mb-10">
             <thead className="bg-slate-50 border-b border-slate-200 print:bg-transparent print:border-black">
               <tr>
-                <th className="py-4 px-4 text-xs font-black text-slate-500 uppercase tracking-widest">Category / Description</th>
+                <th className="py-4 px-4 text-xs font-black text-slate-500 uppercase tracking-widest">Category / Details</th>
                 <th className="py-4 px-4 text-xs font-black text-slate-500 uppercase tracking-widest text-right">Base Value</th>
                 <th className="py-4 px-4 text-xs font-black text-slate-500 uppercase tracking-widest text-right">Applied Tax</th>
                 <th className="py-4 px-4 text-xs font-black text-slate-500 uppercase tracking-widest text-right">Final Amount</th>
@@ -348,7 +372,7 @@ function TaxSetupContent() {
           <table className="w-full text-left border-collapse min-w-[900px] table-fixed">
             <thead className="bg-slate-50/80 border-b border-slate-200 backdrop-blur-sm">
               <tr>
-                <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest w-[25%]">Category / Description</th>
+                <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest w-[25%]">Category / Details</th>
                 <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest w-[20%]">Base Amount</th>
                 <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest w-[35%]">Applied Taxes</th>
                 <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest text-right w-[20%]">Final Amount</th>
