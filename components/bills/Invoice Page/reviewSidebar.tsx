@@ -28,6 +28,8 @@ export function ReviewSidebar() {
 
         try {
             const savePromises = data.items.map(async (item: {
+                id?: string;
+                _id?: string;
                 billNumber?: string;
                 date?: string;
                 description?: string;
@@ -36,12 +38,14 @@ export function ReviewSidebar() {
                 unitPrice?: number;
                 taxes?: { amount: number }[];
             }, idx: number) => {
-                
+                const actualId = item.id || item._id;
+                const isExisting = Boolean(actualId && !actualId.startsWith("item_"));
+
                 const baseAmount = (item.quantity || 1) * (item.unitPrice || 0);
                 const taxAmount = item.taxes ? item.taxes.reduce((sum: number, t: { amount: number }) => sum + (t.amount || 0), 0) : 0;
-                
+
                 const billPayload = {
-                    client: data.clientId, 
+                    client: data.clientId,
                     billNumber: item.billNumber || `${data.summaryNumber || 'INV'}-${idx + 1}`,
                     date: item.date || data.date || new Date(),
                     description: item.description || "Item",
@@ -55,19 +59,20 @@ export function ReviewSidebar() {
                 };
 
                 // DEBUG 2: See the exact payload going to the database
-                console.log(`Sending Payload for item ${idx}:`, billPayload); 
+                console.log(`Sending Payload for item ${idx} (Existing? ${isExisting}, ID: ${actualId}):`, billPayload);
 
-                const res = await fetch("/api/bills", {
-                    method: "POST",
+                const endpoint = isExisting && actualId ? `/api/bills/${actualId}` : "/api/bills";
+                const method = isExisting ? "PUT" : "POST";
+
+                const res = await fetch(endpoint, {
+                    method: method,
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(billPayload),
                 });
 
                 if (!res.ok) {
                     const err = await res.json();
-                    // DEBUG 3: If the database rejects it, find out why
-                    console.error("BACKEND REJECTED BILL:", err); 
-                    throw new Error(err.error || "Failed to save bill");
+                    throw new Error(err.error || "Failed to save bill");        
                 }
             });
 
@@ -75,10 +80,8 @@ export function ReviewSidebar() {
 
             setIsSuccess(true);
             setTimeout(() => {
-                // Redirect directly to your inbox based on your screenshot!
-                router.push("/dashboard/pending-bills"); 
+                router.push("/dashboard/bills");
             }, 1000);
-
         } catch (err: unknown) {
             console.error("CATCH BLOCK TRIGGERED:", err);
             setError(err instanceof Error ? err.message : "Failed to save to database");

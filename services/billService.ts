@@ -8,7 +8,7 @@ export async function getBillsBySummaryService(summaryId: string) {
 
 // ── Get a single bill by its ID ─────────────────────────
 export async function getSingleBillService(id: string) {
-  return await billModel.findById(id);
+  return await billModel.findById(id).populate("client", "name companyName");
 }
 
 // ── Update an existing bill ─────────────────────────────

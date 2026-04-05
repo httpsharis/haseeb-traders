@@ -19,40 +19,33 @@ export default function EditBillPage() {
 
     const fetchBill = async () => {
       try {
-        // Fetch the entire Invoice (Summary + Bills)
-        const res = await fetch(`/api/summaries/${billId}`);
-        if (!res.ok) throw new Error("Failed to load invoice");
+        // We are fetching a single Bill, NOT a summary
+        const res = await fetch(`/api/bills/${billId}`);
+        if (!res.ok) throw new Error("Failed to load bill");
 
-        const rawResponse = await res.json();
-        const summaryObj = rawResponse.summary || rawResponse;
-        const itemsList = rawResponse.bills || rawResponse.items || [];
+        const bill = await res.json();
 
-        // Proper Mapping: Extract parent data from summaryObj, items from itemsList
+        // Seed the Wizard Context with this single bill as the only item
+        // This tricks the wizard into letting us edit this bill using the existing UI
         setData({
-          _id: summaryObj._id || summaryObj.id, // ← Add this line
-          clientId:
-            summaryObj.client?._id || summaryObj.client || "existing-client",
-          clientName: summaryObj.client?.name || "Unknown Client",
-          taxPeriod: summaryObj.taxPeriod || "",
-          summaryNumber: summaryObj.summaryNumber || "",
-          date: summaryObj.date
-            ? new Date(summaryObj.date).toISOString().split("T")[0]
-            : new Date().toISOString().split("T")[0],
-          items: itemsList.map(
-            (item: Partial<LineItem> & { _id?: string; id?: string }) => ({
-              ...item,
-              id:
-                item._id ||
-                item.id ||
-                `item_${Date.now()}_${Math.random().toString(36).substring(2)}`,
-            }),
-          ),
-          summaryTaxes: summaryObj.summaryTaxes || [],
-          discount: summaryObj.discount || 0,
-          commission: summaryObj.commission || 0,
+          clientId: bill.client?._id || bill.client || "existing-client",
+          clientName: bill.client?.companyName || bill.client?.name || "Unknown Client",
+          taxPeriod: "", // Not natively stored on individual bills, but user can fill it in Step 1
+          summaryNumber: bill.billNumber || "", // Map the Bill's Number to the Wizard's summary number field
+          date: bill.date ? new Date(bill.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+          items: [
+             {
+               ...bill,
+               id: bill._id || bill.id || `item_${Date.now()}`
+             }
+          ] as LineItem[],
+          summaryTaxes: [],
+          discount: 0,
+          commission: 0,
         });
 
-        router.push("/dashboard/bills/new/items");
+        // Redirect to Step 1 of the wizard where they can review/edit the Bill #, Date, and Period
+        router.push("/dashboard/bills/new");
       } catch (err) {
         console.error("API Error:", err);
         setError(
@@ -69,13 +62,12 @@ export default function EditBillPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
         <Loader2 className="h-10 w-10 text-[#ea580c] animate-spin mb-4" />
-        <h2 className="text-xl font-bold text-slate-700">Loading Invoice...</h2>
+        <h2 className="text-xl font-bold text-slate-700">Loading Bill into Wizard...</h2>
       </div>
     );
   }
 
   if (error) {
-    // ... Keep your existing error UI here ...
     return <div className="p-8 text-center text-red-500">{error}</div>;
   }
 
