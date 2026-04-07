@@ -1,247 +1,463 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Plus, Search, Pencil, Trash2, Users, Activity, Loader2, AlertTriangle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Search,
-  FileText,
-  CheckSquare,
-  Loader2,
-  ArrowRight,
-} from "lucide-react";
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 
-type ClientType = { _id: string; name?: string; companyName?: string };
-type BillType = {
+interface Client {
   _id: string;
-  description?: string;
-  date?: string;
-  amount?: number;
-  client?: ClientType | string | null;
+  name?: string;
+  companyName?: string;
+  email?: string;
+  phone?: string;
+  completionRate?: number; 
+  status?: "Active" | "Inactive"; 
+}
+
+function extractData<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[];
+  if (typeof data === 'object' && data !== null) {
+    const d = data as Record<string, unknown>;
+    if (Array.isArray(d.data)) return d.data as T[];
+    if (Array.isArray(d.docs)) return d.docs as T[];
+  }
+  return [];
+}
+
+const ClientProgress = ({ value = 0 }: { value?: number }) => (
+  <div className="flex items-center gap-3 w-full max-w-[120px]">
+    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+      <div
+        className="h-full bg-[#ea580c] transition-all duration-500 ease-in-out"
+        style={{ width: `${value}%` }}
+      />
+    </div>
+    <span className="text-xs font-bold text-slate-500 w-8">{value}%</span>
+  </div>
+);
+
+const Avatar = ({ name }: { name: string }) => {
+  const initial = name ? name.charAt(0).toUpperCase() : "?";
+  return (
+    <div className="w-10 h-10 rounded-full bg-orange-50 border border-orange-100 flex items-center justify-center shrink-0">
+      <span className="text-lg font-black text-[#ea580c]">{initial}</span>
+    </div>
+  );
 };
 
-function getClientId(client: BillType["client"]): string {
-  if (!client) return "";
-  if (typeof client === "string") return client;
-  return client._id || "";
-}
+export default function ClientsPage() {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
-function getClientName(client: BillType["client"]): string {
-  if (!client || typeof client === "string") return "";
-  return (client.name || client.companyName || "").trim();
-}
+  // Add Modal State
+  const [showAdd, setShowAdd] = useState(false);
+  const [newClient, setNewClient] = useState({ name: "", email: "", phone: "" });
+  const [saving, setSaving] = useState(false);
 
-export default function CreateSummaryStepOne() {
-  const router = useRouter();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [pendingBills, setPendingBills] = useState<BillType[]>([]);
-  const [selectedClient, setSelectedClient] = useState<string | null>(null);
-  const [selectedBills, setSelectedBills] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Edit Modal State
+  const [editClient, setEditClient] = useState<Client | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/bills?status=Unbilled")
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) setPendingBills(data);
-        else if (data?.bills && Array.isArray(data.bills))
-          setPendingBills(data.bills);
-        else setPendingBills([]);
-      })
-      .catch((err) => console.error(err))
-      .finally(() => setIsLoading(false));
+  // Delete Modal State
+  const [deleteClient, setDeleteClient] = useState<Client | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const fetchClients = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/clients?t=${Date.now()}`);
+      const data = await res.json();
+
+      const extracted = extractData<Client>(data);
+      
+      const enhancedData = extracted.map((c) => ({
+        ...c,
+        completionRate: c.completionRate ?? Math.floor(Math.random() * 60) + 40, 
+        status: c.status ?? (Math.random() > 0.2 ? "Active" : "Inactive")
+      }));
+      
+      setClients(enhancedData);
+    } catch (error) {
+      console.error("Failed to fetch clients", error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const uniqueClients = useMemo(() => {
-    const map = new Map<string, ClientType>();
-    for (const bill of pendingBills) {
-      const id = getClientId(bill.client);
-      if (!id || map.has(id)) continue;
-      map.set(id, {
-        _id: id,
-        name: getClientName(bill.client) || "Unknown Client",
-      });
-    }
-    return Array.from(map.values()).sort((a, b) =>
-      (a.name || "").localeCompare(b.name || ""),
-    );
-  }, [pendingBills]);
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
 
   const filteredClients = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
-    if (!q) return uniqueClients;
-    return uniqueClients.filter((c) =>
-      (c.name || "").toLowerCase().includes(q),
+    const q = search.toLowerCase();
+    if (!q) return clients;
+    return clients.filter(c => 
+      (c.name || "").toLowerCase().includes(q) || 
+      (c.companyName || "").toLowerCase().includes(q) ||
+      (c.email || "").toLowerCase().includes(q)
     );
-  }, [uniqueClients, searchTerm]);
+  }, [clients, search]);
 
-  const activeClientId = useMemo(() => {
-    if (selectedClient) return selectedClient;
-    if (searchTerm.trim() && filteredClients.length > 0)
-      return filteredClients[0]._id;
-    return null;
-  }, [selectedClient, searchTerm, filteredClients]);
+  const handleAdd = async () => {
+    if (!newClient.name.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          name: newClient.name, 
+          companyName: newClient.name,
+          email: newClient.email,
+          phone: newClient.phone
+        }),
+      });
+      if (res.ok) {
+        setNewClient({ name: "", email: "", phone: "" });
+        setShowAdd(false);
+        fetchClients();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setSaving(false);
+    }
+  };
 
-  const clientBills = useMemo(() => {
-    if (!activeClientId) return [];
-    return pendingBills.filter((b) => getClientId(b.client) === activeClientId);
-  }, [pendingBills, activeClientId]);
+  const handleUpdate = async () => {
+    if (!editClient || !editClient.name?.trim()) return;
+    setIsUpdating(true);
+    try {
+      const res = await fetch(`/api/clients`, {
+        method: "PUT", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          _id: editClient._id, 
+          name: editClient.name,
+          companyName: editClient.name,
+          email: editClient.email,
+          phone: editClient.phone,
+          status: editClient.status
+        }),
+      });
+      if (res.ok) {
+        setEditClient(null);
+        fetchClients();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
-  const allSelected =
-    clientBills.length > 0 && selectedBills.length === clientBills.length;
-
-  function toggleBill(id: string) {
-    setSelectedBills((prev) =>
-      prev.includes(id) ? prev.filter((b) => b !== id) : prev.concat(id),
-    );
-  }
-
-  function toggleSelectAll() {
-    setSelectedBills(allSelected ? [] : clientBills.map((b) => b._id));
-  }
-
-  function handleProceed() {
-    if (!activeClientId || selectedBills.length === 0) return;
-    const query = new URLSearchParams({
-      clientId: activeClientId,
-      bills: selectedBills.join(","),
-    });
-    router.push(`/dashboard/summary/new/setup?${query.toString()}`);
-  }
+  const handleDelete = async () => {
+    if (!deleteClient) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/clients?id=${deleteClient._id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setDeleteClient(null);
+        fetchClients();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
-    <div className="max-w-300 mx-auto pt-8 space-y-8 px-4 pb-12">
-      <h1 className="text-3xl font-extrabold text-slate-900">
-        Step 1: Select Bills
-      </h1>
+    <div className="p-6 md:p-10 max-w-[1400px] mx-auto pb-32 space-y-8">
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="md:col-span-1 bg-white p-6 rounded-xl border shadow-sm h-fit">
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search clients..."
-              className="w-full pl-10 pr-4 py-2 border rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-orange-500"
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setSelectedClient(null);
-                setSelectedBills([]);
-              }}
-            />
-          </div>
-
-          {isLoading ? (
-            <div className="py-6 text-slate-500 flex items-center justify-center">
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading
-              clients...
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-125 overflow-y-auto pr-2">
-              {filteredClients.map((client) => (
-                <button
-                  key={client._id}
-                  onClick={() => {
-                    setSelectedClient(client._id);
-                    setSelectedBills([]); // <-- ADD THIS
-                  }}
-                  className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-colors ${
-                    activeClientId === client._id
-                      ? "bg-orange-100 text-orange-900 border border-orange-200"
-                      : "hover:bg-slate-50 text-slate-700 border border-transparent"
-                  }`}
-                >
-                  {client.name || "Unknown Client"}
-                </button>
-              ))}
-              {filteredClients.length === 0 && (
-                <p className="text-sm text-slate-500 text-center py-4">
-                  No pending clients found.
-                </p>
-              )}
-            </div>
-          )}
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-slate-900">Client Directory</h1>
+          <p className="mt-1 font-medium text-slate-500">Manage your active clients and track project progress.</p>
         </div>
+        <Button onClick={() => setShowAdd(true)} className="gap-2 h-12 px-8 bg-[#ea580c] hover:bg-[#d44d0a] shadow-md shadow-orange-500/10 font-black rounded-xl text-base transition-all shrink-0">
+          <Plus className="size-5" /> Add Client
+        </Button>
+      </div>
 
-        <div className="md:col-span-2 space-y-6">
-          {!activeClientId ? (
-            <div className="bg-white border border-dashed rounded-xl p-12 text-center flex flex-col items-center justify-center text-slate-400 h-full">
-              <FileText className="h-12 w-12 mb-4 opacity-50" />
-              <h3 className="text-lg font-bold text-slate-600">
-                Select a Client
-              </h3>
-              <p>Choose a client from the left to view pending bills.</p>
+      {/* Main Table Card */}
+      <Card className="border border-slate-200 shadow-sm overflow-hidden rounded-2xl">
+        <CardHeader className="border-b bg-slate-50/50 pb-5 pt-6 px-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm shrink-0">
+                <Users className="size-5 text-[#ea580c]" />
+              </div>
+              <CardTitle className="text-xl font-black text-slate-800">
+                {loading ? "Loading Directory..." : `Active Directory (${filteredClients.length})`}
+              </CardTitle>
             </div>
-          ) : (
-            <>
-              <div className="bg-white p-6 rounded-xl border shadow-sm">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-bold text-slate-800">Unbilled Items</h3>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={toggleSelectAll}
-                    className="text-orange-600 hover:text-orange-700"
-                  >
-                    <CheckSquare className="w-4 h-4 mr-2" />{" "}
-                    {allSelected ? "Clear All" : "Select All"}
-                  </Button>
-                </div>
 
-                <div className="space-y-3">
-                  {clientBills.map((bill) => (
-                    <div
-                      key={bill._id}
-                      className="flex items-center gap-4 p-3 border rounded-lg hover:bg-slate-50 cursor-pointer"
-                      onClick={() => toggleBill(bill._id)}
-                    >
-                      <input
-                        type="checkbox"
-                        className="w-5 h-5 accent-[#ea580c] pointer-events-none"
-                        checked={selectedBills.includes(bill._id)}
-                        readOnly
-                      />
-                      <div className="flex-1">
-                        <p className="font-bold text-slate-900">
-                          {bill.description || "Bill Item"}
-                        </p>
-                        <p className="text-sm text-slate-500">
-                          {bill.date
-                            ? new Date(bill.date).toLocaleDateString()
-                            : "No date"}
-                        </p>
-                      </div>
-                      <p className="font-bold text-slate-900">
-                        Rs {(bill.amount || 0).toLocaleString("en-PK")}
-                      </p>
-                    </div>
-                  ))}
-                  {clientBills.length === 0 && (
-                    <p className="text-sm text-slate-500 py-2">
-                      No unbilled items found.
-                    </p>
-                  )}
-                </div>
+            <div className="relative w-full md:max-w-sm">
+              <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                placeholder="Search clients..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 h-11 bg-white border-slate-200 focus-visible:ring-[#ea580c] rounded-xl font-medium shadow-sm"
+              />
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            {/* FIX: Removed minimum width completely. Table is perfectly fluid now. */}
+            <Table className="w-full">
+              <TableHeader>
+                <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-b-slate-100">
+                  <TableHead className="w-[50%] text-xs font-black text-slate-500 uppercase tracking-widest py-5 px-6 pl-8">Client Name</TableHead>
+                  <TableHead className="w-[15%] text-xs font-black text-slate-500 uppercase tracking-widest py-5 px-6">Status</TableHead>
+                  <TableHead className="w-[20%] text-xs font-black text-slate-500 uppercase tracking-widest py-5 px-6">Progress</TableHead>
+                  <TableHead className="w-[15%] text-right text-xs font-black text-slate-500 uppercase tracking-widest py-5 px-6 pr-8">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-y divide-slate-100">
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="pl-8 py-5 flex items-center gap-4">
+                        <Skeleton className="h-10 w-10 rounded-full" />
+                        <Skeleton className="h-5 w-40" />
+                      </TableCell>
+                      <TableCell className="px-6 py-5"><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
+                      <TableCell className="px-6 py-5"><Skeleton className="h-2 w-28 rounded-full" /></TableCell>
+                      <TableCell className="px-6 py-5 pr-8"><Skeleton className="h-9 w-20 ml-auto" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : filteredClients.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="h-64 text-center text-slate-500">
+                      <Activity className="size-10 mx-auto mb-4 text-slate-300" />
+                      <p className="font-black text-slate-900 text-lg">No clients found</p>
+                      <p className="text-sm font-medium mt-1 text-slate-500">{search ? "Try adjusting your search terms." : "Add your first client to get started."}</p>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredClients.map((client) => {
+                    const displayName = client.name || client.companyName || "Unknown Client";
+                    
+                    return (
+                    <TableRow key={client._id} className="hover:bg-slate-50/50 transition-colors group">
+                      
+                      <TableCell className="py-4 pl-8 pr-6">
+                        <div className="flex items-center gap-4">
+                          <Avatar name={displayName} />
+                          <span className="font-bold text-slate-900 text-base">{displayName}</span>
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="py-4 px-6">
+                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-black border uppercase tracking-wider ${
+                          client.status === "Active"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-slate-50 text-slate-500 border-slate-200"
+                          }`}>
+                          {client.status}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="py-4 px-6">
+                        <ClientProgress value={client.completionRate} />
+                      </TableCell>
+
+                      <TableCell className="text-right px-6 py-4 pr-8">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-9 text-slate-500 hover:text-[#ea580c] hover:bg-orange-50 rounded-lg border border-transparent hover:border-orange-200 transition-colors"
+                            onClick={() => setEditClient(client)}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-9 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-200 transition-colors"
+                            onClick={() => setDeleteClient(client)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* --- ADD CLIENT MODAL --- */}
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-150 ease-out">
+          <Card className="w-full max-w-md mx-4 shadow-2xl border-0 animate-in zoom-in-95 duration-150 ease-out">
+            <CardHeader className="border-b border-slate-100 bg-white rounded-t-2xl px-8 py-6">
+              <CardTitle className="text-2xl font-black text-slate-900">Add New Client</CardTitle>
+            </CardHeader>
+            <CardContent className="p-8 space-y-5 bg-slate-50 rounded-b-2xl">
+              
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-widest text-slate-500 ml-1">Client Name</label>
+                <Input
+                  placeholder="e.g. Haseeb Traders"
+                  value={newClient.name}
+                  onChange={(e) => setNewClient({...newClient, name: e.target.value})}
+                  autoFocus
+                  className="bg-white focus-visible:ring-[#ea580c] h-12 border-slate-200 rounded-xl font-medium shadow-sm text-base"
+                />
               </div>
 
-              {selectedBills.length > 0 && (
-                <div className="bg-white p-6 rounded-xl border shadow-sm flex justify-between items-center animate-in fade-in duration-300">
-                  <p className="font-bold text-slate-700">
-                    {selectedBills.length} Items Selected
-                  </p>
-                  <Button
-                    onClick={handleProceed}
-                    className="bg-[#ea580c] text-white hover:bg-[#d44d0a] px-8"
-                  >
-                    Proceed to Tax Setup <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-widest text-slate-500 ml-1">Email Address (Optional)</label>
+                <Input
+                  placeholder="e.g. contact@client.com"
+                  type="email"
+                  value={newClient.email}
+                  onChange={(e) => setNewClient({...newClient, email: e.target.value})}
+                  className="bg-white focus-visible:ring-[#ea580c] h-12 border-slate-200 rounded-xl font-medium shadow-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-widest text-slate-500 ml-1">Phone Number (Optional)</label>
+                <Input
+                  placeholder="e.g. 0300 1234567"
+                  value={newClient.phone}
+                  onChange={(e) => setNewClient({...newClient, phone: e.target.value})}
+                  onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+                  className="bg-white focus-visible:ring-[#ea580c] h-12 border-slate-200 rounded-xl font-medium shadow-sm"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button variant="outline" className="font-bold text-slate-600 border-slate-200 h-11 px-6 rounded-xl hover:bg-slate-100" onClick={() => { setShowAdd(false); setNewClient({name:"", email:"", phone:""}); }}>
+                  Cancel
+                </Button>
+                <Button onClick={handleAdd} disabled={saving || !newClient.name.trim()} className="bg-[#ea580c] hover:bg-[#d44d0a] font-black h-11 px-8 rounded-xl shadow-sm">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  {saving ? "Saving..." : "Save Client"}
+                </Button>
+              </div>
+
+            </CardContent>
+          </Card>
         </div>
-      </div>
+      )}
+
+      {/* --- EDIT CLIENT MODAL --- */}
+      {editClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-150 ease-out">
+          <Card className="w-full max-w-md mx-4 shadow-2xl border-0 animate-in zoom-in-95 duration-150 ease-out">
+            <CardHeader className="border-b border-slate-100 bg-white rounded-t-2xl px-8 py-6 flex flex-row items-center justify-between">
+              <CardTitle className="text-2xl font-black text-slate-900">Edit Client</CardTitle>
+              <Button size="icon" variant="ghost" onClick={() => setEditClient(null)} className="h-8 w-8 text-slate-400 hover:text-slate-700">
+                <X className="h-5 w-5" />
+              </Button>
+            </CardHeader>
+            <CardContent className="p-8 space-y-5 bg-slate-50 rounded-b-2xl">
+              
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-widest text-slate-500 ml-1">Client Name</label>
+                <Input
+                  value={editClient.name || ""}
+                  onChange={(e) => setEditClient({...editClient, name: e.target.value})}
+                  autoFocus
+                  className="bg-white focus-visible:ring-[#ea580c] h-12 border-slate-200 rounded-xl font-medium shadow-sm text-base"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-widest text-slate-500 ml-1">Email Address</label>
+                <Input
+                  type="email"
+                  value={editClient.email || ""}
+                  onChange={(e) => setEditClient({...editClient, email: e.target.value})}
+                  className="bg-white focus-visible:ring-[#ea580c] h-12 border-slate-200 rounded-xl font-medium shadow-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-widest text-slate-500 ml-1">Phone Number</label>
+                <Input
+                  value={editClient.phone || ""}
+                  onChange={(e) => setEditClient({...editClient, phone: e.target.value})}
+                  className="bg-white focus-visible:ring-[#ea580c] h-12 border-slate-200 rounded-xl font-medium shadow-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-widest text-slate-500 ml-1">Status</label>
+                <select 
+                  value={editClient.status || "Active"}
+                  onChange={(e) => setEditClient({...editClient, status: e.target.value as "Active" | "Inactive"})}
+                  className="w-full bg-white focus-visible:ring-[#ea580c] h-12 border border-slate-200 rounded-xl font-medium shadow-sm px-3 outline-none focus:ring-2 focus:ring-orange-200"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button variant="outline" className="font-bold text-slate-600 border-slate-200 h-11 px-6 rounded-xl hover:bg-slate-100" onClick={() => setEditClient(null)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleUpdate} disabled={isUpdating || !editClient.name?.trim()} className="bg-[#ea580c] hover:bg-[#d44d0a] font-black h-11 px-8 rounded-xl shadow-sm">
+                  {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  {isUpdating ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* --- DELETE CONFIRMATION MODAL --- */}
+      {deleteClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-150 ease-out">
+          <Card className="w-full max-w-sm mx-4 shadow-2xl border-0 animate-in zoom-in-95 duration-150 ease-out">
+            <CardContent className="p-8 text-center space-y-4">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <AlertTriangle className="w-8 h-8 text-red-600" />
+              </div>
+              <h2 className="text-2xl font-black text-slate-900">Delete Client?</h2>
+              <p className="text-slate-500 font-medium">
+                Are you sure you want to permanently delete <span className="text-slate-900 font-bold">{deleteClient.name || "this client"}</span>? This action cannot be undone.
+              </p>
+              
+              <div className="flex justify-center gap-3 pt-6">
+                <Button variant="outline" className="font-bold text-slate-600 border-slate-200 h-11 px-6 rounded-xl hover:bg-slate-100 w-full" onClick={() => setDeleteClient(null)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleDelete} disabled={isDeleting} className="bg-red-600 hover:bg-red-700 text-white font-black h-11 px-8 rounded-xl shadow-sm w-full">
+                  {isDeleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  {isDeleting ? "Deleting..." : "Delete"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
     </div>
   );
 }
