@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Printer, Download, Info, Loader2 } from "lucide-react";
+import { CheckCircle2, Printer, Download, Info, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useWizard } from "@/components/bills";
+import { useWizard, LineItem, TaxCharge } from "@/components/bills"; 
 
 export function ReviewSidebar() {
     const router = useRouter();
@@ -17,9 +17,6 @@ export function ReviewSidebar() {
         setIsSaving(true);
         setError("");
 
-        // DEBUG 1: See exactly what the wizard is trying to save
-        console.log("FINALIZING INVOICE - DATA STATE:", data); 
-
         if (!data || !data.items || data.items.length === 0) {
             setError("No items found to save! Did you add items to the invoice?");
             setIsSaving(false);
@@ -27,64 +24,76 @@ export function ReviewSidebar() {
         }
 
         try {
-            const savePromises = data.items.map(async (item: {
-                id?: string;
-                _id?: string;
-                billNumber?: string;
-                date?: string;
-                description?: string;
-                category?: string;
-                quantity?: number;
-                unitPrice?: number;
-                taxes?: { amount: number }[];
-            }, idx: number) => {
-                const actualId = item.id || item._id;
-                const isExisting = Boolean(actualId && !actualId.startsWith("item_"));
+            let masterBaseAmount = 0;
+            let masterTaxAmount = 0;
 
-                const baseAmount = (item.quantity || 1) * (item.unitPrice || 0);
-                const taxAmount = item.taxes ? item.taxes.reduce((sum: number, t: { amount: number }) => sum + (t.amount || 0), 0) : 0;
+            const formattedItems = data.items.map((item: LineItem) => {
+                const q = Number(item.quantity) || 1;
+                const p = Number(item.unitPrice) || 0;
+                const itemBase = q * p;
+                
+                const itemTax = Array.isArray(item.taxes) 
+                    ? item.taxes.reduce((sum: number, t: TaxCharge) => sum + (Number(t.amount) || 0), 0) 
+                    : 0;
+                
+                masterBaseAmount += itemBase;
+                masterTaxAmount += itemTax;
 
-                const billPayload = {
-                    client: data.clientId,
-                    billNumber: item.billNumber || `${data.summaryNumber || 'INV'}-${idx + 1}`,
-                    date: item.date || data.date || new Date(),
+                return {
                     description: item.description || "Item",
                     category: item.category || "General",
-                    quantity: item.quantity || 1,
-                    unitPrice: item.unitPrice || 0,
-                    baseAmount: baseAmount,
-                    taxAmount: taxAmount,
-                    amount: baseAmount + taxAmount,
-                    taxes: item.taxes || [],
+                    quantity: q,
+                    unitPrice: p,
+                    amount: itemBase + itemTax,
+                    taxes: item.taxes || []
                 };
-
-                // DEBUG 2: See the exact payload going to the database
-                console.log(`Sending Payload for item ${idx} (Existing? ${isExisting}, ID: ${actualId}):`, billPayload);
-
-                const endpoint = isExisting && actualId ? `/api/bills/${actualId}` : "/api/bills";
-                const method = isExisting ? "PUT" : "POST";
-
-                const res = await fetch(endpoint, {
-                    method: method,
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(billPayload),
-                });
-
-                if (!res.ok) {
-                    const err = await res.json();
-                    throw new Error(err.error || "Failed to save bill");        
-                }
             });
 
-            await Promise.all(savePromises);
+            const uniqueCategories = Array.from(
+                new Set(data.items.map((item: LineItem) => item.category).filter(Boolean))
+            );
+            const masterCategory = uniqueCategories.length > 0 ? uniqueCategories.join(", ") : "General";
+
+            const masterDescription = data.items.length === 1 
+                ? data.items[0].description 
+                : "Combined Invoice";
+
+            const masterBillPayload = {
+                client: data.clientId,
+                billNumber: data.summaryNumber || `INV-${Date.now().toString().slice(-6)}`,
+                date: data.date || new Date().toISOString(),
+                description: masterDescription, 
+                category: masterCategory, 
+                
+                quantity: 1, 
+                unitPrice: masterBaseAmount, 
+                
+                baseAmount: masterBaseAmount,
+                taxAmount: masterTaxAmount,
+                amount: masterBaseAmount + masterTaxAmount,
+                items: formattedItems
+            };
+
+            const res = await fetch("/api/bills", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(masterBillPayload),
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Server rejected the save request.");        
+            }
 
             setIsSuccess(true);
             setTimeout(() => {
                 router.push("/dashboard/bills");
             }, 1000);
+            
+        // STRICT TYPING FIX: Changed 'any' to 'unknown'
         } catch (err: unknown) {
-            console.error("CATCH BLOCK TRIGGERED:", err);
-            setError(err instanceof Error ? err.message : "Failed to save to database");
+            console.error("Save Failed:", err);
+            setError(err instanceof Error ? err.message : "Failed to connect to database");
         } finally {
             setIsSaving(false);
         }
@@ -103,9 +112,13 @@ export function ReviewSidebar() {
                     <h3 className="font-bold text-slate-900">Actions</h3>
                 </div>
 
-                {error && <div className="p-3 bg-red-50 text-red-600 text-sm font-medium rounded-lg border border-red-100">{error}</div>}
+                {error && (
+                    <div className="p-3 bg-red-50 text-red-700 text-sm font-bold rounded-lg border border-red-200 flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                        <p>{error}</p>
+                    </div>
+                )}
 
-                {/* Animated Smart Button */}
                 <Button
                     onClick={handleFinalize}
                     disabled={isSaving || isSuccess}
@@ -148,13 +161,6 @@ export function ReviewSidebar() {
                         <span className="text-sm font-bold text-slate-900">PKR (Rs)</span>
                     </div>
                 </div>
-            </div>
-
-            <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 flex items-start gap-3">
-                <Info className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
-                <p className="text-xs font-medium text-orange-800 leading-relaxed">
-                    Once finalized, this invoice will be sent to the Pending Bills inbox for review.
-                </p>
             </div>
         </div>
     );

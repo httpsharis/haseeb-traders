@@ -12,12 +12,14 @@ export interface TaxCharge {
 
 export interface LineItem {
   id: string; // Temporary client-side ID
+  _id?: string; // Add this! (Optional MongoDB ID for editing)
   billNumber: string;
   date: string;
   description: string;
   category: string;
   quantity: number;
   unitPrice: number;
+  amount?: number; // Add this! (Optional calculated amount)
   taxes: TaxCharge[];
 }
 
