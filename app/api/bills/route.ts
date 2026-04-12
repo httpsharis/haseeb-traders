@@ -37,25 +37,40 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
     try {
         await connectDB();
-        const data = await req.json();
+        const payload = await req.json();
 
-        // Force every saved item back to the inbox
-        data.status = "Unbilled"; 
-
-        // THE OVERWRITE FIX:
-        // If your "Create Bill" form accidentally sends an old _id or billNumber,
-        // we forcefully delete them from the payload so MongoDB has no choice 
-        // but to create a brand new, unique row every single time.
-        delete data._id;
+        payload.status = "Unbilled"; 
         
-        // Note: If you ACTUALLY want to edit/update bills later, you will need 
-        // to put the `findByIdAndUpdate` logic back here, but for now, this 
-        // forces the creation of new bills so you can see them all!
-        const newBill = await BillModel.create(data);
-        return NextResponse.json(newBill, { status: 201 });
+        // THE UPSERT FIX: Check if the frontend sent an existing ID
+        if (payload._id) {
+            // Update the existing document
+            const updatedBill = await BillModel.findByIdAndUpdate(
+                payload._id, 
+                payload, 
+                { new: true } 
+            );
+            return NextResponse.json(updatedBill, { status: 200 });
+        } else {
+            // Create a brand new document
+            delete payload._id; 
+            const newBill = await BillModel.create(payload);
+            return NextResponse.json(newBill, { status: 201 });
+        }
 
     } catch (error: unknown) {
-        console.error("Bill POST Error:", error);
-        return NextResponse.json({ error: "Failed to save bill" }, { status: 500 });
+        console.error("DATABASE REJECTION:", error);
+        
+        // Strictly typed check for MongoDB duplicate key error
+        if (typeof error === "object" && error !== null && "code" in error) {
+            const dbError = error as { code: number };
+            if (dbError.code === 11000) {
+                 return NextResponse.json({ 
+                     error: "Duplicate Error: This Invoice Number is already used." 
+                 }, { status: 400 });
+            }
+        }
+
+        const errorMessage = error instanceof Error ? error.message : "Failed to save bill";
+        return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
 }
