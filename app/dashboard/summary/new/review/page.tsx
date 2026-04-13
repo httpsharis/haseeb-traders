@@ -47,9 +47,16 @@ interface SummaryData {
     mathResults: MathResults;
 }
 
+interface ClientRecord {
+    _id: string;
+    name?: string;
+    companyName?: string;
+}
+
 export default function ReviewSummaryPage() {
     const router = useRouter();
     const [data, setData] = useState<SummaryData | null>(null);
+    const [fetchedClientName, setFetchedClientName] = useState<string>("");
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
@@ -58,7 +65,31 @@ export default function ReviewSummaryPage() {
             router.push("/dashboard/summary/new");
             return;
         }
-        setData(JSON.parse(saved) as SummaryData);
+        
+        const parsedData = JSON.parse(saved) as SummaryData;
+        setData(parsedData);
+
+        if (parsedData.clientId) {
+            fetch(`/api/clients?t=${Date.now()}`)
+                .then(res => res.json())
+                .then(clientRes => {
+                    let clientsArray: ClientRecord[] = [];
+                    
+                    if (Array.isArray(clientRes)) {
+                        clientsArray = clientRes as ClientRecord[];
+                    } else if (Array.isArray(clientRes?.data)) {
+                        clientsArray = clientRes.data as ClientRecord[];
+                    } else if (Array.isArray(clientRes?.docs)) {
+                        clientsArray = clientRes.docs as ClientRecord[];
+                    }
+
+                    const foundClient = clientsArray.find((c: ClientRecord) => c._id === parsedData.clientId);
+                    if (foundClient) {
+                        setFetchedClientName(foundClient.name || foundClient.companyName || "");
+                    }
+                })
+                .catch(err => console.error("Failed to fetch client name", err));
+        }
     }, [router]);
 
     const handleFinalize = async () => {
@@ -97,7 +128,8 @@ export default function ReviewSummaryPage() {
 
     if (!data) return <div className="flex h-[calc(100vh-4rem)] items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#ea580c]" /></div>;
 
-    const { bills, mathResults, globalTaxes, clientName } = data;
+    const { bills, mathResults, globalTaxes } = data;
+    const finalDisplayName = fetchedClientName || data.clientName || "LOADING CLIENT...";
 
     const formatAmt = (num: number) => num.toLocaleString("en-PK", { maximumFractionDigits: 0 });
     const getBaseAmount = (bill: BillType): number => {
@@ -113,16 +145,19 @@ export default function ReviewSummaryPage() {
         const baseAmt = getBaseAmount(bill);
         let currentSub = baseAmt;
         const rowTaxes: Record<string, number> = {};
+        
         globalTaxes.filter(t => t.target === "BaseAmount").forEach(tax => {
             const amt = baseAmt * (tax.percentage / 100);
             rowTaxes[tax.id] = amt;
             if (tax.impact === "Add") currentSub += amt;
         });
+        
         globalTaxes.filter(t => t.target === "SubtotalAmount").forEach(tax => {
             const amt = currentSub * (tax.percentage / 100);
             rowTaxes[tax.id] = amt;
             if (tax.impact === "Add") currentSub += amt;
         });
+        
         return { baseAmt, rowTaxes, finalAmt: currentSub };
     };
 
@@ -132,8 +167,8 @@ export default function ReviewSummaryPage() {
     const allTaxesCombinedSum = mathResults.processedTaxes.reduce((sum, t) => sum + t.calculatedAmount, 0);
 
     return (
-        <div className="min-h-screen bg-[#f8fafc] pb-32 print:bg-transparent print:pb-0">
-            <div className="max-w-[1050px] mx-auto pt-8 px-4 space-y-6 print:p-0 print:m-0 print:max-w-none print:w-full">
+        <div className="min-h-screen bg-[#f8fafc] pb-32 print:bg-white print:pb-0 print:min-h-0">
+            <div className="max-w-[1100px] mx-auto pt-8 px-4 space-y-6 print:p-0 print:m-0 print:space-y-0 print:max-w-none print:w-full">
                 
                 {/* ACTIONS - HIDDEN ON PRINT */}
                 <div className="flex items-center justify-between print:hidden mb-8">
@@ -142,7 +177,7 @@ export default function ReviewSummaryPage() {
                     </Button>
                     <div className="flex gap-3">
                         <Button variant="outline" onClick={() => window.print()} className="font-bold bg-white">
-                            <Printer className="w-4 h-4 mr-2" /> Print Landscape
+                            <Printer className="w-4 h-4 mr-2" /> Print Ledger
                         </Button>
                         <Button onClick={handleFinalize} disabled={isSaving} className="bg-[#ea580c] text-white hover:bg-[#d44d0a] font-bold px-8">
                             {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : "Save & Finalize"}
@@ -153,158 +188,155 @@ export default function ReviewSummaryPage() {
                 {/* --- AGGRESSIVE PRINT CSS OVERRIDE --- */}
                 <style dangerouslySetInnerHTML={{ __html: `
                     @media print { 
-                        @page { size: landscape; margin: 10mm; }
-                        /* Hide everything on the page by default */
-                        body * { visibility: hidden; }
+                        @page { size: landscape; margin: 0mm !important; }
                         
-                        /* Make ONLY the print wrapper and its children visible */
+                        body * { visibility: hidden; }
                         #print-wrapper, #print-wrapper * { visibility: visible; }
                         
-                        /* Rip the wrapper out of the layout and put it at the top left */
                         #print-wrapper { 
                             position: absolute; 
                             left: 0; 
                             top: 0; 
-                            width: 100%; 
+                            width: 100vw; 
+                            height: 100vh;
+                            padding: 10mm;
                             margin: 0;
-                            padding: 0;
                             border: none !important;
                             box-shadow: none !important;
+                            background: white !important;
+                            border-radius: 0 !important;
                         }
                         
-                        /* Nuke the background colors of the app layout */
                         html, body, main { background: white !important; }
                         * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                     }
                 ` }} />
 
-                {/* --- START OF LANDSCAPE PRINTABLE DOCUMENT --- */}
-                <div id="print-wrapper" className="bg-white w-full text-slate-900 font-sans text-[13px] leading-tight shadow-sm rounded-xl overflow-hidden border border-slate-200 print:border-none print:shadow-none print:rounded-none">
+                {/* --- START OF DOCUMENT --- */}
+                <div id="print-wrapper" className="bg-[#fcfaf8] w-full text-black font-sans text-[13px] leading-tight shadow-xl rounded-xl border border-slate-300 p-8 print:p-0">
                     
                     {/* PAGE HEADER */}
-                    <div className="relative p-8 pb-4 border-b border-slate-100 print:border-slate-300">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">{clientName || "Haseeb Traders"}</h1>
-                                <p className="text-slate-500 font-bold tracking-widest text-[11px] mt-1 print:text-slate-800">BILLING MANAGEMENT SYSTEM</p>
-                            </div>
-                            <div className="text-right">
-                                <div className="inline-block bg-slate-900 text-white px-4 py-1 rounded text-[14px] font-black tracking-widest print:border print:border-black">
-                                    SUMMARY NO. 4
-                                </div>
-                                <p className="mt-2 text-slate-400 font-bold uppercase text-[10px] tracking-widest print:text-slate-600">Dated: {formattedDate}</p>
-                            </div>
+                    <div className="border-b-2 border-black pb-4 mb-6">
+                        <div className="text-center mb-4">
+                            <h1 className="text-3xl font-black tracking-widest uppercase text-black">{finalDisplayName}</h1>
+                            <h2 className="text-xl font-bold tracking-[0.4em] uppercase text-black mt-2">Summary</h2>
                         </div>
-                        <div className="mt-6 text-center border-y border-slate-900 py-2 print:border-black">
-                            <h2 className="text-xl font-black tracking-[0.3em] uppercase text-slate-800 print:text-black">Summary Invoice Ledger</h2>
+                        
+                        {/* Meta Data Row */}
+                        <div className="flex justify-end">
+                            <div className="flex border-2 border-black text-[12px] font-bold bg-white">
+                                <div className="px-4 py-1.5 border-r-2 border-black uppercase tracking-wider">Summary No.</div>
+                                <div className="px-6 py-1.5 border-r-2 border-black">4</div>
+                                <div className="px-4 py-1.5 border-r-2 border-black uppercase tracking-wider">Dated</div>
+                                <div className="px-6 py-1.5">{formattedDate}</div>
+                            </div>
                         </div>
                     </div>
 
                     {/* MAIN TABLE */}
-                    <div className="px-8 py-4">
-                        <div className="border border-slate-300 print:border-slate-800 rounded-lg print:rounded-none overflow-hidden">
-                            <table className="w-full border-collapse text-center">
-                                <thead className="bg-slate-100 print:bg-slate-200 border-b border-slate-300 print:border-slate-800">
-                                    <tr className="divide-x divide-slate-300 print:divide-slate-800">
-                                        <th className="py-2.5 w-10 text-[10px] font-black uppercase text-slate-500 print:text-slate-800">Sr.</th>
-                                        <th className="py-2.5 w-20 text-[10px] font-black uppercase text-slate-500 print:text-slate-800">Date</th>
-                                        <th className="py-2.5 w-32 text-[10px] font-black uppercase text-slate-500 print:text-slate-800">Invoice No.</th>
-                                        <th className="py-2.5 px-4 text-left text-[10px] font-black uppercase text-slate-500 print:text-slate-800">Description</th>
-                                        <th className="py-2.5 px-2 w-28 text-[10px] font-black uppercase text-slate-500 print:text-slate-800">Base Val</th>
-                                        {globalTaxes.map(tax => (
-                                            <th key={tax.id} className="py-2.5 px-2 w-24 bg-orange-50/50 print:bg-transparent">
-                                                <div className="font-black text-[10px] uppercase text-[#ea580c] print:text-slate-800">{tax.name}</div>
-                                                <div className="text-[9px] font-bold text-orange-400/70 print:text-slate-600">{tax.percentage}%</div>
-                                            </th>
-                                        ))}
-                                        <th className="py-2.5 w-32 bg-slate-900 print:bg-slate-300 text-white print:text-slate-900 text-[10px] font-black uppercase">Net Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-200 print:divide-slate-400">
-                                    {bills.map((bill, index) => {
-                                        const row = getRowData(bill);
-                                        return (
-                                            <tr key={bill._id} className="divide-x divide-slate-200 print:divide-slate-400 hover:bg-slate-50 transition-colors print:hover:bg-white">
-                                                <td className="py-2.5 px-2 text-slate-500 print:text-slate-800 font-medium">{index + 1}</td>
-                                                <td className="py-2.5 px-2 text-slate-600 print:text-slate-800">{bill.date ? new Date(bill.date).toLocaleDateString() : "-"}</td>
-                                                <td className="py-2.5 px-2 font-bold text-slate-900">{bill.billNumber || `INV-${bill._id.slice(-4).toUpperCase()}`}</td>
-                                                <td className="py-2.5 px-4 text-left font-bold text-slate-800 print:text-slate-900">{bill.category || bill.description}</td>
-                                                <td className="py-2.5 px-2 font-bold text-slate-600 print:text-slate-800">{formatAmt(row.baseAmt)}</td>
-                                                {globalTaxes.map(tax => (
-                                                    <td key={tax.id} className="py-2.5 px-2 font-medium text-slate-600 print:text-slate-800 bg-orange-50/20 print:bg-transparent">
-                                                        {row.rowTaxes[tax.id] > 0 ? formatAmt(row.rowTaxes[tax.id]) : "-"}
-                                                    </td>
-                                                ))}
-                                                <td className="py-2.5 px-2 font-black text-slate-900 text-[13px]">{formatAmt(row.finalAmt)}</td>
-                                            </tr>
-                                        );
+                    <div className="mb-6">
+                        <table className="w-full border-collapse text-center border-2 border-black bg-white">
+                            <thead className="border-b-2 border-black">
+                                <tr className="divide-x-2 divide-black">
+                                    <th className="py-3 w-10 text-[11px] font-black uppercase text-black">Sr.</th>
+                                    <th className="py-3 w-24 text-[11px] font-black uppercase text-black">Date</th>
+                                    <th className="py-3 w-32 text-[11px] font-black uppercase text-black">Invoice No.</th>
+                                    <th className="py-3 px-4 text-left text-[11px] font-black uppercase text-black">Description</th>
+                                    <th className="py-3 px-2 w-28 text-[11px] font-black uppercase text-black">Base Val</th>
+                                    {globalTaxes.map(tax => (
+                                        <th key={tax.id} className="py-3 px-2 w-24">
+                                            <div className="font-black text-[11px] uppercase text-black leading-tight mb-1">{tax.name}</div>
+                                            <div className="text-[10px] font-bold text-black">{tax.percentage}%</div>
+                                        </th>
+                                    ))}
+                                    <th className="py-3 w-32 text-black text-[11px] font-black uppercase">Net Total</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y border-b-2 border-black divide-black">
+                                {bills.map((bill, index) => {
+                                    const row = getRowData(bill);
+                                    return (
+                                        <tr key={bill._id} className="divide-x-2 divide-black print:hover:bg-white hover:bg-slate-50 transition-colors">
+                                            <td className="py-2.5 px-2 text-black font-medium">{index + 1}</td>
+                                            <td className="py-2.5 px-2 text-black font-medium">{bill.date ? new Date(bill.date).toLocaleDateString() : "-"}</td>
+                                            <td className="py-2.5 px-2 font-bold text-black">{bill.billNumber || `INV-${bill._id.slice(-4).toUpperCase()}`}</td>
+                                            <td className="py-2.5 px-4 text-left font-bold text-black">{bill.category || bill.description}</td>
+                                            <td className="py-2.5 px-2 font-bold text-black">{formatAmt(row.baseAmt)}</td>
+                                            {globalTaxes.map(tax => (
+                                                <td key={tax.id} className="py-2.5 px-2 font-medium text-black">
+                                                    {row.rowTaxes[tax.id] > 0 ? formatAmt(row.rowTaxes[tax.id]) : "-"}
+                                                </td>
+                                            ))}
+                                            <td className="py-2.5 px-2 font-black text-black text-[13px]">{formatAmt(row.finalAmt)}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                            <tfoot className="font-black divide-x-2 divide-black">
+                                <tr>
+                                    <td colSpan={4} className="py-3.5 text-right pr-6 text-[12px] uppercase tracking-widest text-black">Payable Amount</td>
+                                    <td className="py-3.5 text-[13px] text-black">{formatAmt(mathResults.combinedBillsTotal)}</td>
+                                    {globalTaxes.map(tax => {
+                                        const taxTotal = mathResults.processedTaxes.find(t => t.id === tax.id)?.calculatedAmount || 0;
+                                        return <td key={tax.id} className="py-3.5 text-[13px] text-black">{taxTotal > 0 ? formatAmt(taxTotal) : "-"}</td>
                                     })}
-                                </tbody>
-                                <tfoot className="bg-slate-50 print:bg-slate-100 font-black divide-x divide-slate-300 print:divide-slate-800 border-t-2 border-slate-900 print:border-black">
-                                    <tr>
-                                        <td colSpan={4} className="py-3 text-right pr-6 text-[11px] uppercase tracking-[0.2em] text-slate-500 print:text-slate-800">Total Payable Amount</td>
-                                        <td className="py-3 text-[13px] text-slate-700 print:text-slate-900">{formatAmt(mathResults.combinedBillsTotal)}</td>
-                                        {globalTaxes.map(tax => {
-                                            const taxTotal = mathResults.processedTaxes.find(t => t.id === tax.id)?.calculatedAmount || 0;
-                                            return <td key={tax.id} className="py-3 text-[13px] text-[#ea580c] print:text-slate-900">{taxTotal > 0 ? formatAmt(taxTotal) : "-"}</td>
-                                        })}
-                                        <td className="py-3 text-[16px] font-black bg-slate-900 print:bg-slate-300 text-white print:text-slate-900 italic">{formatAmt(mathResults.finalNetTotal)}</td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
+                                    <td className="py-3.5 text-[15px] font-black text-black">{formatAmt(mathResults.finalNetTotal)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
                     </div>
 
                     {/* FOOTER STATS SECTION */}
-                    <div className="px-8 pb-8 mt-2">
-                        <div className="flex justify-between items-start gap-8">
-                            
-                            {/* VERTICAL STATS */}
-                            <div className="flex-1 max-w-[400px] space-y-px rounded-lg print:rounded-none overflow-hidden border border-slate-300 print:border-slate-800">
-                                <div className="flex bg-slate-900 print:bg-slate-200 print:border-b print:border-slate-800 text-white print:text-slate-900 font-black">
-                                    <div className="flex-1 px-4 py-2 text-[11px] uppercase tracking-widest">Final Net Amount</div>
-                                    <div className="w-32 text-right px-4 py-2 text-[14px] italic">{formatAmt(mathResults.finalNetTotal)}</div>
-                                </div>
-                                <div className="flex bg-slate-50 print:bg-white font-bold text-slate-400 print:text-slate-800 print:border-b print:border-slate-800">
-                                    <div className="flex-1 px-4 py-1.5 text-[10px] uppercase tracking-widest">Non-Taxable Portion</div>
-                                    <div className="w-32 text-right px-4 py-1.5">-</div>
-                                </div>
-                                <div className="flex bg-white font-bold text-slate-700 print:text-slate-900 print:border-b print:border-slate-800">
-                                    <div className="flex-1 px-4 py-1.5 text-[10px] uppercase tracking-widest">Gross Billing Base</div>
-                                    <div className="w-32 text-right px-4 py-1.5">{formatAmt(mathResults.combinedBillsTotal)}</div>
-                                </div>
-                                {globalTaxes.map(tax => {
-                                    const taxTotal = mathResults.processedTaxes.find(t => t.id === tax.id)?.calculatedAmount || 0;
-                                    return (
-                                        <div key={tax.id} className="flex bg-white font-bold text-slate-600 print:text-slate-900 border-t border-slate-100 print:border-b print:border-slate-800">
-                                            <div className="flex-1 px-4 py-1.5 text-[10px] uppercase tracking-widest">{tax.name} ({tax.percentage}%)</div>
-                                            <div className="w-32 text-right px-4 py-1.5">{taxTotal > 0 ? formatAmt(taxTotal) : "-"}</div>
-                                        </div>
-                                    )
-                                })}
-                                <div className="flex bg-slate-100 print:bg-slate-200 font-black text-slate-900 print:text-slate-900 border-t border-slate-300 print:border-slate-800">
-                                    <div className="flex-1 px-4 py-2 text-[11px] uppercase tracking-widest">Total Taxes Applied</div>
-                                    <div className="w-32 text-right px-4 py-2 text-[#ea580c] print:text-slate-900">{formatAmt(allTaxesCombinedSum)}</div>
-                                </div>
+                    <div className="flex justify-between items-start gap-8">
+                        
+                        {/* VERTICAL STATS BOX */}
+                        <div className="w-[320px] border-2 border-black divide-y-2 divide-black text-[12px] bg-white">
+                            <div className="flex font-bold divide-x-2 divide-black">
+                                <div className="flex-1 px-4 py-2 text-center">Net Amount</div>
+                                <div className="w-32 text-center px-4 py-2">{formatAmt(mathResults.finalNetTotal)}</div>
                             </div>
-
-                            {/* MONTH & NOTE BOX */}
-                            <div className="w-[300px] border-2 border-slate-900 print:border-slate-800 rounded-xl print:rounded-none p-5 text-center relative overflow-hidden bg-slate-50/50 print:bg-transparent">
-                                <div className="absolute top-0 left-0 w-full h-1 bg-slate-900 print:hidden"></div>
-                                <h3 className="text-xl font-black text-slate-900 tracking-widest uppercase mb-3">{monthYear}</h3>
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-black uppercase text-[#ea580c] print:text-slate-800 tracking-widest underline underline-offset-2">Internal Note</p>
-                                    <p className="text-[11px] font-bold text-slate-500 print:text-slate-800 leading-tight">This ledger summary is for internal verification and account balancing only.</p>
-                                </div>
+                            <div className="flex font-bold divide-x-2 divide-black">
+                                <div className="flex-1 px-4 py-2 text-center">Non-Taxable Portion</div>
+                                <div className="w-32 text-center px-4 py-2">-</div>
                             </div>
-
-                            {/* SIGNATURE */}
-                            <div className="flex-1 max-w-[200px] pt-20 text-center">
-                                <div className="w-full h-px bg-slate-900 mx-auto mb-2 print:bg-black"></div>
-                                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-900 print:text-black">Authorized Signature</p>
+                            <div className="flex font-bold divide-x-2 divide-black">
+                                <div className="flex-1 px-4 py-2 text-center">Gross Billing</div>
+                                <div className="w-32 text-center px-4 py-2">{formatAmt(mathResults.combinedBillsTotal)}</div>
                             </div>
-
+                            {globalTaxes.map(tax => {
+                                const taxTotal = mathResults.processedTaxes.find(t => t.id === tax.id)?.calculatedAmount || 0;
+                                return (
+                                    <div key={tax.id} className="flex font-bold divide-x-2 divide-black">
+                                        <div className="flex-1 px-4 py-2 text-center">{tax.name} ({tax.percentage}%)</div>
+                                        <div className="w-32 text-center px-4 py-2">{taxTotal > 0 ? formatAmt(taxTotal) : "-"}</div>
+                                    </div>
+                                )
+                            })}
+                            <div className="flex font-black divide-x-2 divide-black">
+                                <div className="flex-1 px-4 py-2 text-center">Total Tax</div>
+                                <div className="w-32 text-center px-4 py-2">{formatAmt(allTaxesCombinedSum)}</div>
+                            </div>
                         </div>
+
+                        {/* MONTH & NOTE BOX */}
+                        <div className="w-[280px] border-2 border-black flex flex-col bg-white">
+                            <div className="text-center font-black text-xl py-4 border-b-2 border-black uppercase tracking-widest text-black">
+                                {monthYear}
+                            </div>
+                            <div className="p-5 text-center flex-1 flex flex-col justify-center items-center">
+                                <h3 className="text-[13px] font-black mb-2 text-black uppercase tracking-widest underline underline-offset-4">Note</h3>
+                                <p className="text-[11px] font-bold text-black leading-snug">
+                                    For internal record keeping only. Not intended for official tax submission.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* SIGNATURE */}
+                        <div className="flex-1 max-w-[220px] h-[140px] flex flex-col justify-end pb-4 px-4 border-2 border-black relative bg-white">
+                            <div className="absolute top-[80px] left-[10%] w-[80%] h-[2px] bg-black"></div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-black text-center">Authorized Signature</p>
+                        </div>
+
                     </div>
                 </div>
             </div>

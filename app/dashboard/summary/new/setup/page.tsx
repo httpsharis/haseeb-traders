@@ -38,6 +38,19 @@ interface GlobalAppliedTax {
     calculatedAmount?: number;
 }
 
+interface RawTaxRule {
+    taxName?: string;
+    name?: string;
+    title?: string;
+    rate?: number | string;
+    percentage?: number | string;
+    value?: number | string;
+    target?: string;
+    impact?: string;
+    status?: string | boolean;
+    isActive?: boolean;
+}
+
 // --- HELPERS ---
 function parseAmt(val: string | number | undefined | null): number {
     if (typeof val === "number") return val;
@@ -85,29 +98,55 @@ function TaxSetupContent() {
                 setBills(extractedBills.filter((b: BillType) => billIds.includes(b._id)));
             });
 
-        const fetchTaxes = fetch(`/api/tax-rules?t=${Date.now()}`)
+        const fetchTaxes = fetch(`/api/tax-types?t=${Date.now()}`)
             .then(res => res.ok ? res.json() : [])
             .then(data => {
-                let rawRules: Record<string, unknown>[] = [];
-                if (Array.isArray(data)) rawRules = data;
-                else if (Array.isArray(data?.data)) rawRules = data.data;
-                else if (Array.isArray(data?.docs)) rawRules = data.docs;
-                else if (Array.isArray(data?.data?.docs)) rawRules = data.data.docs;
-                else if (Array.isArray(data?.rules)) rawRules = data.rules;
+                // Aggressively find the array in the API response without using the 'any' type
+                let rawRules: RawTaxRule[] = [];
+                
+                if (Array.isArray(data)) {
+                    rawRules = data as RawTaxRule[];
+                } else if (data && typeof data === 'object') {
+                    const dataRecord = data as Record<string, unknown>;
+                    
+                    if (Array.isArray(dataRecord.data)) rawRules = dataRecord.data as RawTaxRule[];
+                    else if (Array.isArray(dataRecord.docs)) rawRules = dataRecord.docs as RawTaxRule[];
+                    else if (Array.isArray(dataRecord.taxes)) rawRules = dataRecord.taxes as RawTaxRule[];
+                    else if (Array.isArray(dataRecord.rules)) rawRules = dataRecord.rules as RawTaxRule[];
+                    else if (dataRecord.data && typeof dataRecord.data === 'object') {
+                        const innerData = dataRecord.data as Record<string, unknown>;
+                        if (Array.isArray(innerData.docs)) rawRules = innerData.docs as RawTaxRule[];
+                    } else {
+                        // Fallback: grab the very first array found in the JSON response object
+                        const firstArrayObj = Object.values(dataRecord).find(val => Array.isArray(val));
+                        if (firstArrayObj) rawRules = firstArrayObj as RawTaxRule[];
+                    }
+                }
 
                 const mappedRules = rawRules
-                    .filter((r) => r.status !== "Inactive" && r.status !== false)
+                    .filter((r) => {
+                        if (r.isActive !== undefined) return r.isActive === true;
+                        const statusStr = r.status ? String(r.status).toLowerCase() : "active";
+                        return statusStr === "active" || statusStr === "true";
+                    })
                     .map((r) => ({
-                        name: (r.taxName as string) || (r.name as string) || "Custom Tax",
-                        percentage: parseAmt((r.rate as number) || (r.percentage as number)),
+                        name: r.taxName || r.name || r.title || "Custom Tax",
+                        percentage: parseAmt(r.rate ?? r.percentage ?? r.value ?? 0),
                         target: (r.target as TaxApplicationTarget) || "BaseAmount",
-                        impact: (r.impact as TaxFinancialImpact) || "Add"
+                        // Check if it's income tax to default to DisplayOnly, else Add
+                        impact: (r.impact as TaxFinancialImpact) || 
+                            (String(r.name || "").toLowerCase().includes("income") ? "DisplayOnly" : "Add")
                     }));
                     
-                setAvailableTaxRules(mappedRules.length > 0 ? mappedRules : [
-                    { name: "Service Charges", percentage: 11, target: "SubtotalAmount", impact: "Add" },
-                    { name: "Income Tax", percentage: 5.5, target: "BaseAmount", impact: "DisplayOnly" }
-                ]);
+                const finalRules = mappedRules.length > 0 ? mappedRules : [
+                    { name: "Service Charges (Fallback)", percentage: 11, target: "SubtotalAmount", impact: "Add" },
+                    { name: "Income Tax (Fallback)", percentage: 5.5, target: "BaseAmount", impact: "DisplayOnly" }
+                ] as DBTaxRule[];
+
+                setAvailableTaxRules(finalRules);
+            })
+            .catch(err => {
+                console.error("Failed to fetch global taxes:", err);
             });
 
         Promise.all([fetchBills, fetchTaxes]).finally(() => setIsLoading(false));
