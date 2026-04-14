@@ -15,10 +15,11 @@ export async function GET() {
       .sort({ createdAt: -1 });
 
     return NextResponse.json(summaries, { status: 200 });
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("Summary GET Error:", error);
+    const message = error instanceof Error ? error.message : "Failed to fetch summaries";
     return NextResponse.json(
-      { error: "Failed to fetch summaries" },
+      { error: message },
       { status: 500 }
     );
   }
@@ -49,8 +50,10 @@ export async function POST(req: Request) {
 
         return NextResponse.json(newSummary, { status: 201 });
 
-    } catch (error: unknown) {
+    } catch (error) {
         console.error("Summary POST Error:", error);
-        return NextResponse.json({ error: "Failed to save summary" }, { status: 500 });
+        // THE FIX: Send the actual Mongoose validation error to the frontend!
+        const message = error instanceof Error ? error.message : "Failed to save summary";
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

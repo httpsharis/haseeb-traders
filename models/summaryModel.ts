@@ -25,19 +25,24 @@ const summarySchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  bills: [{ 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: "Bill" 
+  bills: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Bill"
   }],
-  
+
   // NEW: Separated Totals for Accurate Math
   totalBaseAmount: { type: Number, default: 0 }, // Sum of all raw bill bases (No GST)
   totalTaxAmount: { type: Number, default: 0 },  // Sum of all bill GSTs
   summarySubTotal: { type: Number, default: 0 }, // Base + GST combined
-  
-  summaryTaxes: [summaryTaxesSchema], // These now calculate against totalBaseAmount
+
+  summaryTaxes: [{
+    name: { type: String },
+    percentage: { type: Number },
+    target: { type: String, enum: ["BaseAmount", "SubtotalAmount"] },
+    impact: { type: String, enum: ["Add", "DisplayOnly"] }
+  }], // These now calculate against totalBaseAmount
   netPayable: { type: Number, default: 0 },
-  
+
   status: {
     type: String,
     enum: ["Draft", "Converted"],
@@ -51,7 +56,7 @@ const summarySchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
-  dueDate: { type: Date }, 
+  dueDate: { type: Date },
   notes: { type: String },
 }, { timestamps: true });
 

@@ -27,7 +27,7 @@ interface GlobalAppliedTax {
     percentage: number;
     target: "BaseAmount" | "SubtotalAmount";
     impact: "Add" | "DisplayOnly";
-    calculatedAmount: number;
+    calculatedAmount?: number;
 }
 
 interface MathResults {
@@ -96,16 +96,34 @@ export default function ReviewSummaryPage() {
         if (!data) return;
         setIsSaving(true);
         try {
+            const dateObj = new Date();
+            const currentTaxPeriod = dateObj.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+            // Generate a clean, 5-digit summary number
+            const shortId = Math.floor(10000 + Math.random() * 90000);
+
+            // Explicitly map the taxes to include the 'amount' field your database requires
+            const formattedTaxesForDB = data.globalTaxes.map(tax => {
+                const processed = data.mathResults.processedTaxes.find(t => t.id === tax.id);
+                return {
+                    name: tax.name,
+                    percentage: tax.percentage,
+                    target: tax.target,
+                    impact: tax.impact,
+                    amount: processed ? processed.calculatedAmount : 0 
+                };
+            });
+
             const summaryPayload = {
                 client: data.clientId,
-                summaryNumber: "SUM-" + Date.now(),
-                date: new Date().toISOString(),
+                summaryNumber: `SUM-${shortId}`, // <--- The cleaner, shorter number
+                date: dateObj.toISOString(),
                 bills: data.billIds,
                 summarySubTotal: data.mathResults.combinedBillsTotal,
                 totalTaxAmount: data.mathResults.standardTaxesTotal,
                 netPayable: data.mathResults.finalNetTotal,
-                summaryTaxes: data.globalTaxes, 
-                status: "Finalized",
+                summaryTaxes: formattedTaxesForDB, 
+                taxPeriod: currentTaxPeriod
             };
 
             const res = await fetch("/api/summaries", {
@@ -114,11 +132,17 @@ export default function ReviewSummaryPage() {
                 body: JSON.stringify(summaryPayload),
             });
 
-            if (res.ok) {
-                sessionStorage.removeItem("pendingSummary");
-                window.print();
-                setTimeout(() => router.push("/dashboard/summary"), 500);
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                const errorMsg = errorData.error || errorData.message || res.statusText;
+                alert(`Database Error: ${errorMsg}`);
+                throw new Error(errorMsg);
             }
+
+            sessionStorage.removeItem("pendingSummary");
+            window.print();
+            setTimeout(() => router.push("/dashboard/summary"), 500);
+            
         } catch (error) {
             console.error("Failed to save summary:", error);
         } finally {
@@ -164,7 +188,7 @@ export default function ReviewSummaryPage() {
     const today = new Date();
     const monthYear = today.toLocaleDateString("en-US", { month: "short", year: "numeric" }).toUpperCase();
     const formattedDate = `${today.getDate()}/${today.toLocaleDateString("en-US", { month: "short" })}/${today.toLocaleDateString("en-US", { year: "2-digit" })}`;
-    const allTaxesCombinedSum = mathResults.processedTaxes.reduce((sum, t) => sum + t.calculatedAmount, 0);
+    const allTaxesCombinedSum = mathResults.processedTaxes.reduce((sum, t) => sum + (t.calculatedAmount || 0), 0);
 
     return (
         <div className="min-h-screen bg-[#f8fafc] pb-32 print:bg-white print:pb-0 print:min-h-0">
