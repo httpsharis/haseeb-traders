@@ -1,4 +1,5 @@
 import mongoose, { Schema } from "mongoose";
+import { Bill } from "@/types"; 
 
 // ── Tax Charge Sub-Schema ───────────────────────────────
 const taxChargeSchema = new Schema({
@@ -45,9 +46,9 @@ const billSchema = new Schema({
   taxAmount: { type: Number, required: true },
   amount: { type: Number, required: true },
   
-  // THE FIX: The array that actually holds the rows
+  // The array that actually holds the rows
   items: [lineItemSchema],
 
 }, { timestamps: true });
 
-export default mongoose.models.Bill || mongoose.model("Bill", billSchema);
+export default mongoose.models.Bill || mongoose.model<Bill>("Bill", billSchema);
