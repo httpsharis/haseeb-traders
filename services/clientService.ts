@@ -1,5 +1,5 @@
 import ClientModel from "@/models/clientModel";
-import { IClient } from "@/types";
+import { Client } from "@/types"; 
 
 // ── Query params for client search/pagination ───────────
 export interface ClientQueryParams {
@@ -9,8 +9,11 @@ export interface ClientQueryParams {
 }
 
 // ── Update a client ─────────────────────────────────────
-export async function updateClientService(id: string, body: Partial<IClient>) {
-  return await ClientModel.findByIdAndUpdate(id, body, { new: true });
+export async function updateClientService(id: string, body: Partial<Client>) {
+  return await ClientModel.findByIdAndUpdate(id, body, { 
+      new: true,
+      runValidators: true // Enforces Mongoose schema rules on update
+  });
 }
 
 // ── Delete a client ─────────────────────────────────────
@@ -19,8 +22,6 @@ export async function deleteClientService(id: string) {
 }
 
 // ── Get all clients with search + pagination ────────────
-// Query examples:
-//   GET /api/clients?search=school&page=1&limit=20
 export async function getClientsService(params: ClientQueryParams = {}) {
   const {
     search,
@@ -33,8 +34,8 @@ export async function getClientsService(params: ClientQueryParams = {}) {
   const skip = (Math.max(page, 1) - 1) * safeLimit;
 
   // Build filter — case-insensitive name search
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const filter: Record<string, any> = {};
+  // Cleaned up the 'any' type for strict TypeScript safety
+  const filter: Record<string, unknown> = {};
   if (search) {
     filter.name = new RegExp(search, "i");
   }
@@ -60,7 +61,10 @@ export async function getClientsService(params: ClientQueryParams = {}) {
 }
 
 // ── Create a new client ─────────────────────────────────
-export async function createClientService(data: IClient) {
+export async function createClientService(data: Partial<Client>) {
+  if (!data.name) {
+      throw new Error("Client name is required.");
+  }
   return await ClientModel.create(data);
 }
 

@@ -1,5 +1,5 @@
 import TaxTypeModel from "@/models/taxTypeModel";
-import { ITaxType } from "@/types";
+import { TaxRule } from "@/types"; 
 
 // ── Get all tax types ───────────────────────────────────
 // Returns all tax types, sorted alphabetically.
@@ -15,8 +15,9 @@ export async function getActiveTaxTypesService() {
 }
 
 // ── Create a new tax type ───────────────────────────────
-export async function createTaxTypeService(data: Omit<ITaxType, "_id">) {
-  const { name, percentage } = data;
+// We strictly define that 'isActive' might be passed alongside normal TaxRule data
+export async function createTaxTypeService(data: Partial<TaxRule> & { isActive?: boolean }) {
+  const { name, percentage, target, impact, status, isActive } = data;
 
   if (!name || percentage == null) {
     throw new Error("Tax type name and percentage are required.");
@@ -24,13 +25,19 @@ export async function createTaxTypeService(data: Omit<ITaxType, "_id">) {
 
   return await TaxTypeModel.create({
     name: name.trim(),
-    percentage,
-    isActive: data.isActive ?? true,
+    percentage: Number(percentage),
+    
+    // --- Injecting the Math Engine Rules ---
+    target: target || "BaseAmount",
+    impact: impact || "Add",
+    
+    // Clean, strict fallback logic without using 'any'
+    isActive: isActive ?? (status !== false && status !== "false"),
   });
 }
 
 // ── Update a tax type ───────────────────────────────────
-export async function updateTaxTypeService(id: string, data: Partial<ITaxType>) {
+export async function updateTaxTypeService(id: string, data: Partial<TaxRule> & { isActive?: boolean }) {
   return await TaxTypeModel.findByIdAndUpdate(id, data, {
     new: true,
     runValidators: true,

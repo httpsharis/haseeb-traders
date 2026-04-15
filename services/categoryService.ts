@@ -1,5 +1,5 @@
 import CategoryModel from "@/models/categoryModel";
-import { ICategory } from "@/types";
+import { Category } from "@/types"; 
 
 // ── Get all categories ──────────────────────────────────
 // Returns all categories, sorted alphabetically.
@@ -15,8 +15,8 @@ export async function getActiveCategoriesService() {
 
 // ── Create a new category ───────────────────────────────
 // Called when the user presses the "+" button on the category dropdown.
-export async function createCategoryService(data: Omit<ICategory, "_id">) {
-  const { name } = data;
+export async function createCategoryService(data: Partial<Category>) {
+  const { name, description, isActive } = data; // <-- Now capturing description!
 
   if (!name) {
     throw new Error("Category name is required.");
@@ -24,12 +24,13 @@ export async function createCategoryService(data: Omit<ICategory, "_id">) {
 
   return await CategoryModel.create({
     name: name.trim(),
-    isActive: data.isActive ?? true,
+    description: description?.trim(), // Safely trim if it exists
+    isActive: isActive ?? true,
   });
 }
 
 // ── Update a category ───────────────────────────────────
-export async function updateCategoryService(id: string, data: Partial<ICategory>) {
+export async function updateCategoryService(id: string, data: Partial<Category>) {
   return await CategoryModel.findByIdAndUpdate(id, data, {
     new: true,
     runValidators: true,
