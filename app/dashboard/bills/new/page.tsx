@@ -1,213 +1,197 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Loader2, Plus, Search, FileText, Trash2, Printer } from "lucide-react";
+import { useState } from "react";
+import { WizardProvider, useWizard, StepIndicator } from "@/components/bills";
+import { ClientSelector } from "@/components/bills/clientPage/clientSelector";
+import { BillDetailsForm } from "@/components/bills/clientPage/clientDetailsForm";
+import { LineItemsTable } from "@/components/bills/itemsPage/lineItemsTable";
+import { LiveDraftSidebar } from "@/components/bills/itemsPage/liveDraftSidebar";
+import { InvoicePreview } from "@/components/bills/Invoice Page/invoicePreview";
+import { ReviewSidebar } from "@/components/bills/Invoice Page/reviewSidebar";
 
-// --- STRICT TYPES ---
-interface ClientType {
-    _id: string;
-    name?: string;
-    companyName?: string;
-}
+/**
+ * Inner component that uses the Wizard context
+ * Split this way so WizardProvider is available
+ */
+function CreateBillContent() {
+  const [currentStep, setCurrentStep] = useState(1);
+  const { data, setClientInfo, reset } = useWizard();
 
-interface SummaryRecord {
-    _id: string;
-    summaryNumber?: string;
-    client?: ClientType | string;
-    date: string;
-    bills?: unknown[]; 
-    netPayable?: number;
-    status?: string;
-}
+  // STEP 1: Client Details Validation
+  const isStep1Valid = () => {
+    return data.clientId && data.clientName && data.summaryNumber && data.date && data.taxPeriod;
+  };
 
-export default function AllSummariesPage() {
-    const router = useRouter();
-    const [summaries, setSummaries] = useState<SummaryRecord[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState("");
+  // STEP 2: Items Validation
+  const isStep2Valid = () => {
+    return data.items && data.items.length > 0;
+  };
 
-    useEffect(() => {
-        fetchSummaries();
-    }, []);
+  // Handle Next button logic
+  const handleNext = () => {
+    if (currentStep === 1) {
+      if (!isStep1Valid()) {
+        alert("Please complete all client details before proceeding.");
+        return;
+      }
+      setCurrentStep(2);
+    } else if (currentStep === 2) {
+      if (!isStep2Valid()) {
+        alert("Please add at least one item to the invoice.");
+        return;
+      }
+      setCurrentStep(3);
+    }
+  };
 
-    const fetchSummaries = async () => {
-        try {
-            setIsLoading(true);
-            const res = await fetch(`/api/summaries?t=${Date.now()}`);
-            if (!res.ok) throw new Error("Failed to fetch summaries");
-            
-            const data = await res.json();
-            
-            let rawSummaries: SummaryRecord[] = [];
-            
-            // Standard Database Extraction
-            if (Array.isArray(data)) {
-                rawSummaries = data as SummaryRecord[];
-            } else if (data && typeof data === 'object') {
-                const dataRecord = data as Record<string, unknown>;
-                
-                if (Array.isArray(dataRecord.data)) rawSummaries = dataRecord.data as SummaryRecord[];
-                else if (Array.isArray(dataRecord.docs)) rawSummaries = dataRecord.docs as SummaryRecord[];
-                else if (Array.isArray(dataRecord.summaries)) rawSummaries = dataRecord.summaries as SummaryRecord[];
-            }
+  // Handle Back button logic
+  const handleBack = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
 
-            // STRICT GATEKEEPER FILTER: 
-            // This guarantees that even if the backend sends Clients, they will be deleted.
-            // A record MUST have a summaryNumber or netPayable to survive this filter.
-            const validSummaries = rawSummaries.filter(s => {
-                if (!s) return false;
-                const hasSummaryNumber = typeof s.summaryNumber === 'string';
-                const hasNetPayable = typeof s.netPayable === 'number';
-                const hasBills = Array.isArray(s.bills);
-                
-                return hasSummaryNumber || hasNetPayable || hasBills;
-            });
-            
-            // Sort by newest first based on date
-            const sorted = validSummaries.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-            setSummaries(sorted);
-        } catch (error) {
-            console.error("Error fetching summaries:", error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+  // Handle Cancel (reset and go back to dashboard)
+  const handleCancel = () => {
+    reset();
+  };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("Are you sure you want to delete this summary? This action cannot be undone.")) return;
-        
-        try {
-            const res = await fetch(`/api/summaries/${id}`, { method: "DELETE" });
-            if (res.ok) {
-                setSummaries(prev => prev.filter(s => s._id !== id));
-            }
-        } catch (error) {
-            console.error("Failed to delete summary", error);
-        }
-    };
-
-    const getClientName = (clientData: ClientType | string | undefined | null): string => {
-        if (!clientData) return "Unknown Client";
-        if (typeof clientData === "string") return "Client ID: " + clientData.substring(0, 6);
-        return clientData.companyName || clientData.name || "Unknown Client";
-    };
-
-    const filteredSummaries = summaries.filter(s => {
-        const term = searchTerm.toLowerCase();
-        const clientName = getClientName(s.client).toLowerCase();
-        const sumNum = (s.summaryNumber || "").toLowerCase();
-        return clientName.includes(term) || sumNum.includes(term);
-    });
-
-    const formatAmt = (num: number | undefined | null) => Number(num || 0).toLocaleString("en-PK", { maximumFractionDigits: 0 });
-
-    return (
-        <div className="p-8 max-w-7xl mx-auto space-y-8">
-            
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">All Summaries</h1>
-                    <p className="text-sm font-medium text-slate-500 mt-1">Manage and review your master billing ledgers.</p>
-                </div>
-                <Button 
-                    onClick={() => router.push("/dashboard/summary/new")} 
-                    className="bg-[#ea580c] text-white hover:bg-[#d44d0a] font-bold shadow-sm h-11 px-6 rounded-xl transition-colors"
-                >
-                    <Plus className="w-4 h-4 mr-2" /> Create Summary
-                </Button>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-                <Search className="w-5 h-5 text-slate-400 ml-2" />
-                <input 
-                    type="text" 
-                    placeholder="Search by Summary No. or Client Name..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="flex-1 h-10 outline-none font-medium text-slate-700 bg-transparent"
-                />
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                {isLoading ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                        <Loader2 className="w-8 h-8 animate-spin text-[#ea580c] mb-4" />
-                        <p className="font-bold text-sm tracking-widest uppercase">Loading Summaries...</p>
-                    </div>
-                ) : filteredSummaries.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                        <FileText className="w-12 h-12 text-slate-200 mb-4" />
-                        <p className="font-bold text-lg text-slate-600">No summaries found.</p>
-                        <p className="text-sm mt-1">Try adjusting your search or check your backend API.</p>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-slate-50 border-b border-slate-200">
-                                    <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest">Summary No.</th>
-                                    <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest">Date</th>
-                                    <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest">Client</th>
-                                    <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Bills</th>
-                                    <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest text-right">Net Payable</th>
-                                    <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Status</th>
-                                    <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {filteredSummaries.map((summary) => (
-                                    <tr key={summary._id} className="hover:bg-slate-50/50 transition-colors">
-                                        <td className="py-4 px-6 font-bold text-slate-900">
-                                            {summary.summaryNumber || `SUM-${summary._id.substring(0, 5).toUpperCase()}`}
-                                        </td>
-                                        <td className="py-4 px-6 font-medium text-slate-600">
-                                            {summary.date ? new Date(summary.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : "-"}
-                                        </td>
-                                        <td className="py-4 px-6 font-bold text-slate-800">
-                                            {getClientName(summary.client)}
-                                        </td>
-                                        <td className="py-4 px-6 text-center font-bold text-slate-600">
-                                            <span className="bg-slate-100 text-slate-600 py-1 px-3 rounded-full text-xs">
-                                                {summary.bills?.length || 0}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-6 font-black text-[#ea580c] text-right">
-                                            Rs {formatAmt(summary.netPayable)}
-                                        </td>
-                                        <td className="py-4 px-6 text-center">
-                                            <span className="bg-green-100 text-green-700 font-bold text-[10px] uppercase tracking-widest py-1.5 px-3 rounded-md">
-                                                {summary.status || "Finalized"}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-6 text-right space-x-2">
-                                            <Button 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                onClick={() => router.push(`/dashboard/summary/${summary._id}`)}
-                                                className="text-slate-400 hover:text-[#ea580c] hover:bg-orange-50 transition-colors"
-                                                title="View / Print"
-                                            >
-                                                <Printer className="w-4 h-4" />
-                                            </Button>
-                                            <Button 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                onClick={() => handleDelete(summary._id)}
-                                                className="text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                title="Delete"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
+  return (
+    <div className="min-h-screen bg-linear-to-b from-slate-50 via-white to-slate-50 pb-12">
+      {/* Top Navigation */}
+      <nav className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Create Invoice</h1>
+            <p className="text-sm text-slate-500 mt-0.5 font-medium">Build and review your invoice in simple steps</p>
+          </div>
         </div>
-    );
+      </nav>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+        {/* Step Indicator */}
+        <StepIndicator currentStep={currentStep} />
+
+        {/* Step 1: Client Information */}
+        {currentStep === 1 && (
+          <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8 max-w-2xl mx-auto">
+            <h2 className="text-xl font-bold text-slate-900 mb-8">Step 1: Client Information</h2>
+            
+            <div className="space-y-8">
+              {/* Client Selector */}
+              <ClientSelector
+                selectedName={data.clientName}
+                onSelect={(id, name) => setClientInfo(id, name, data.summaryNumber, data.taxPeriod, data.date)}
+              />
+
+              {/* Bill Details - shown only after client is selected */}
+              {data.clientName && (
+                <BillDetailsForm
+                  clientName={data.clientName}
+                  summaryNumber={data.summaryNumber}
+                  setSummaryNumber={(val) => setClientInfo(data.clientId, data.clientName, val, data.taxPeriod, data.date)}
+                  date={data.date}
+                  setDate={(val) => setClientInfo(data.clientId, data.clientName, data.summaryNumber, data.taxPeriod, val)}
+                  taxPeriod={data.taxPeriod}
+                  setTaxPeriod={(val) => setClientInfo(data.clientId, data.clientName, data.summaryNumber, val, data.date)}
+                />
+              )}
+            </div>
+
+            {/* Navigation Footer */}
+            <div className="flex justify-end gap-4 pt-8 border-t border-slate-100 mt-8">
+              <button
+                onClick={handleCancel}
+                className="px-8 h-11 rounded-lg border border-slate-300 font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleNext}
+                disabled={!isStep1Valid()}
+                className="px-8 h-11 rounded-lg bg-[#ea580c] text-white font-medium hover:bg-[#c2410c] disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              >
+                Next <span className="ml-1">→</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Line Items */}
+        {currentStep === 2 && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+                <div className="p-8">
+                  <h2 className="text-xl font-bold text-slate-900 mb-8">Step 2: Line Items</h2>
+                  <LineItemsTable />
+                </div>
+
+                {/* Navigation Footer */}
+                <div className="flex justify-between gap-4 p-8 border-t border-slate-100 bg-slate-50">
+                  <button
+                    onClick={handleBack}
+                    className="px-8 h-11 rounded-lg border border-slate-300 font-medium text-slate-700 hover:bg-white transition-colors"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    onClick={handleNext}
+                    disabled={!isStep2Valid()}
+                    className="px-8 h-11 rounded-lg bg-[#ea580c] text-white font-medium hover:bg-[#c2410c] disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  >
+                    Review <span className="ml-1">→</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Live Draft Sidebar */}
+            <div className="lg:col-span-1">
+              <LiveDraftSidebar />
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Review & Finalize */}
+        {currentStep === 3 && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <InvoicePreview />
+            </div>
+
+            {/* Review Sidebar with Submit */}
+            <div className="lg:col-span-1">
+              <ReviewSidebar />
+            </div>
+          </div>
+        )}
+
+        {/* Bottom Navigation for Step 3 */}
+        {currentStep === 3 && (
+          <div className="flex justify-between gap-4 mt-8 pt-8 border-t border-slate-200">
+            <button
+              onClick={handleBack}
+              className="px-8 h-11 rounded-lg border border-slate-300 font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              ← Back to Items
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Main Page Component
+ * Wraps content with WizardProvider to supply context to all child components
+ */
+export default function CreateBillPage() {
+  return (
+    <WizardProvider>
+      <CreateBillContent />
+    </WizardProvider>
+  );
 }

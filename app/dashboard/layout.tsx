@@ -1,8 +1,8 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
-import { Navbar } from "@/components/navbar";
+import { AppSidebar } from "@/components/layout/appSidebar";
+import { Navbar } from "@/components/layout/navbar";
 
 // ── Dashboard Layout ────────────────────────────────────
 // Wraps all /dashboard/* pages with the sidebar + navbar shell.

@@ -2,7 +2,16 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Search, FileText, Users, Receipt, ArrowRight, Command, X, Loader2 } from "lucide-react";
+import {
+  Search,
+  FileText,
+  Users,
+  Receipt,
+  ArrowRight,
+  Command,
+  X,
+  Loader2,
+} from "lucide-react";
 
 interface ClientResult {
   _id: string;
@@ -42,7 +51,11 @@ interface SearchResults {
 export function SearchDialog() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResults>({ clients: [], summaries: [], bills: [] });
+  const [results, setResults] = useState<SearchResults>({
+    clients: [],
+    summaries: [],
+    bills: [],
+  });
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -97,28 +110,41 @@ export function SearchDialog() {
   }, [query]);
 
   // Build flat list of all results for keyboard navigation
+  const navigate = useCallback(
+    (url: string) => {
+      setOpen(false);
+      router.push(url);
+    },
+    [router],
+  );
+
   const flatResults = useCallback(() => {
     const items: { type: string; id: string; action: () => void }[] = [];
     results.clients.forEach((c) => {
-      items.push({ type: "client", id: c._id, action: () => navigate(`/dashboard/clients`) });
+      items.push({
+        type: "client",
+        id: c._id,
+        action: () => navigate(`/dashboard/clients`),
+      });
     });
     results.summaries.forEach((s) => {
-      const url = s.status === "Draft" ? `/dashboard/pending-bills/${s._id}` : `/dashboard/summaries`;
+      const url =
+        s.status === "Draft"
+          ? `/dashboard/pending-bills/${s._id}`
+          : `/dashboard/summaries`;
       items.push({ type: "summary", id: s._id, action: () => navigate(url) });
     });
     results.bills.forEach((b) => {
       const summaryId = b.summary?._id;
       const status = b.summary?.status;
-      const url = status === "Draft" && summaryId ? `/dashboard/pending-bills/${summaryId}` : `/dashboard/summaries`;
+      const url =
+        status === "Draft" && summaryId
+          ? `/dashboard/pending-bills/${summaryId}`
+          : `/dashboard/summaries`;
       items.push({ type: "bill", id: b._id, action: () => navigate(url) });
     });
     return items;
-  }, [results]);
-
-  const navigate = (url: string) => {
-    setOpen(false);
-    router.push(url);
-  };
+  }, [results, navigate]);
 
   // Keyboard navigation within results
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -135,20 +161,25 @@ export function SearchDialog() {
     }
   };
 
-  const hasResults = results.clients.length > 0 || results.summaries.length > 0 || results.bills.length > 0;
+  const hasResults =
+    results.clients.length > 0 ||
+    results.summaries.length > 0 ||
+    results.bills.length > 0;
   let currentFlatIndex = -1;
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-100" role="dialog" aria-modal="true">
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setOpen(false)} />
+      <div
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={() => setOpen(false)}
+      />
 
       {/* Dialog */}
       <div className="fixed inset-x-0 top-[15%] mx-auto w-full max-w-xl px-4">
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
-          
           {/* Search Input */}
           <div className="flex items-center border-b px-4">
             <Search className="size-5 text-slate-400 shrink-0" />
@@ -164,7 +195,10 @@ export function SearchDialog() {
             {loading ? (
               <Loader2 className="size-4 text-slate-400 animate-spin shrink-0" />
             ) : query ? (
-              <button onClick={() => setQuery("")} className="text-slate-400 hover:text-slate-600">
+              <button
+                onClick={() => setQuery("")}
+                className="text-slate-400 hover:text-slate-600"
+              >
                 <X className="size-4" />
               </button>
             ) : (
@@ -176,29 +210,43 @@ export function SearchDialog() {
 
           {/* Results */}
           <div className="max-h-[60vh] overflow-y-auto p-2">
-            
             {query.length < 2 ? (
               <div className="py-12 text-center">
                 <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-slate-100">
                   <Search className="size-5 text-slate-400" />
                 </div>
-                <p className="text-sm text-slate-500">Start typing to search across your data</p>
+                <p className="text-sm text-slate-500">
+                  Start typing to search across your data
+                </p>
                 <div className="mt-3 flex items-center justify-center gap-4 text-xs text-slate-400">
                   <span className="flex items-center gap-1">
-                    <kbd className="rounded border bg-slate-100 px-1 py-0.5 font-mono text-[10px]">↑↓</kbd> to navigate
+                    <kbd className="rounded border bg-slate-100 px-1 py-0.5 font-mono text-[10px]">
+                      ↑↓
+                    </kbd>{" "}
+                    to navigate
                   </span>
                   <span className="flex items-center gap-1">
-                    <kbd className="rounded border bg-slate-100 px-1 py-0.5 font-mono text-[10px]">↵</kbd> to select
+                    <kbd className="rounded border bg-slate-100 px-1 py-0.5 font-mono text-[10px]">
+                      ↵
+                    </kbd>{" "}
+                    to select
                   </span>
                   <span className="flex items-center gap-1">
-                    <kbd className="rounded border bg-slate-100 px-1 py-0.5 font-mono text-[10px]">esc</kbd> to close
+                    <kbd className="rounded border bg-slate-100 px-1 py-0.5 font-mono text-[10px]">
+                      esc
+                    </kbd>{" "}
+                    to close
                   </span>
                 </div>
               </div>
             ) : !hasResults && !loading ? (
               <div className="py-12 text-center">
-                <p className="text-sm text-slate-500">No results found for &quot;{query}&quot;</p>
-                <p className="mt-1 text-xs text-slate-400">Try a different search term</p>
+                <p className="text-sm text-slate-500">
+                  No results found for &quot;{query}&quot;
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Try a different search term
+                </p>
               </div>
             ) : (
               <>
@@ -218,16 +266,24 @@ export function SearchDialog() {
                           onClick={() => navigate("/dashboard/clients")}
                           onMouseEnter={() => setActiveIndex(idx)}
                           className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left transition-colors ${
-                            activeIndex === idx ? "bg-[#ea580c]/5 text-[#ea580c]" : "text-slate-700 hover:bg-slate-50"
+                            activeIndex === idx
+                              ? "bg-[#ea580c]/5 text-[#ea580c]"
+                              : "text-slate-700 hover:bg-slate-50"
                           }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`flex size-8 items-center justify-center rounded-lg ${activeIndex === idx ? "bg-[#ea580c]/10" : "bg-slate-100"}`}>
+                            <div
+                              className={`flex size-8 items-center justify-center rounded-lg ${activeIndex === idx ? "bg-[#ea580c]/10" : "bg-slate-100"}`}
+                            >
                               <Users className="size-4" />
                             </div>
-                            <span className="text-sm font-medium">{client.name}</span>
+                            <span className="text-sm font-medium">
+                              {client.name}
+                            </span>
                           </div>
-                          <ArrowRight className={`size-3.5 ${activeIndex === idx ? "opacity-100" : "opacity-0"}`} />
+                          <ArrowRight
+                            className={`size-3.5 ${activeIndex === idx ? "opacity-100" : "opacity-0"}`}
+                          />
                         </button>
                       );
                     })}
@@ -244,35 +300,50 @@ export function SearchDialog() {
                     {results.summaries.map((summary) => {
                       currentFlatIndex++;
                       const idx = currentFlatIndex;
-                      const url = summary.status === "Draft" ? `/dashboard/pending-bills/${summary._id}` : `/dashboard/summaries`;
+                      const url =
+                        summary.status === "Draft"
+                          ? `/dashboard/pending-bills/${summary._id}`
+                          : `/dashboard/summaries`;
                       return (
                         <button
                           key={summary._id}
                           onClick={() => navigate(url)}
                           onMouseEnter={() => setActiveIndex(idx)}
                           className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left transition-colors ${
-                            activeIndex === idx ? "bg-[#ea580c]/5 text-[#ea580c]" : "text-slate-700 hover:bg-slate-50"
+                            activeIndex === idx
+                              ? "bg-[#ea580c]/5 text-[#ea580c]"
+                              : "text-slate-700 hover:bg-slate-50"
                           }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`flex size-8 items-center justify-center rounded-lg ${activeIndex === idx ? "bg-[#ea580c]/10" : "bg-slate-100"}`}>
+                            <div
+                              className={`flex size-8 items-center justify-center rounded-lg ${activeIndex === idx ? "bg-[#ea580c]/10" : "bg-slate-100"}`}
+                            >
                               <FileText className="size-4" />
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium">#{summary.summaryNumber}</span>
-                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                  summary.status === "Draft"
-                                    ? "bg-amber-100 text-amber-700"
-                                    : "bg-green-100 text-green-700"
-                                }`}>
+                                <span className="text-sm font-medium">
+                                  #{summary.summaryNumber}
+                                </span>
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                    summary.status === "Draft"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-green-100 text-green-700"
+                                  }`}
+                                >
                                   {summary.status}
                                 </span>
                               </div>
-                              <p className="text-xs text-slate-400">{summary.client?.name} • {summary.taxPeriod}</p>
+                              <p className="text-xs text-slate-400">
+                                {summary.client?.name} • {summary.taxPeriod}
+                              </p>
                             </div>
                           </div>
-                          <ArrowRight className={`size-3.5 ${activeIndex === idx ? "opacity-100" : "opacity-0"}`} />
+                          <ArrowRight
+                            className={`size-3.5 ${activeIndex === idx ? "opacity-100" : "opacity-0"}`}
+                          />
                         </button>
                       );
                     })}
@@ -291,30 +362,42 @@ export function SearchDialog() {
                       const idx = currentFlatIndex;
                       const summaryId = bill.summary?._id;
                       const status = bill.summary?.status;
-                      const url = status === "Draft" && summaryId ? `/dashboard/pending-bills/${summaryId}` : `/dashboard/summaries`;
+                      const url =
+                        status === "Draft" && summaryId
+                          ? `/dashboard/pending-bills/${summaryId}`
+                          : `/dashboard/summaries`;
                       return (
                         <button
                           key={bill._id}
                           onClick={() => navigate(url)}
                           onMouseEnter={() => setActiveIndex(idx)}
                           className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left transition-colors ${
-                            activeIndex === idx ? "bg-[#ea580c]/5 text-[#ea580c]" : "text-slate-700 hover:bg-slate-50"
+                            activeIndex === idx
+                              ? "bg-[#ea580c]/5 text-[#ea580c]"
+                              : "text-slate-700 hover:bg-slate-50"
                           }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`flex size-8 items-center justify-center rounded-lg ${activeIndex === idx ? "bg-[#ea580c]/10" : "bg-slate-100"}`}>
+                            <div
+                              className={`flex size-8 items-center justify-center rounded-lg ${activeIndex === idx ? "bg-[#ea580c]/10" : "bg-slate-100"}`}
+                            >
                               <Receipt className="size-4" />
                             </div>
                             <div>
-                              <span className="text-sm font-medium">{bill.description}</span>
+                              <span className="text-sm font-medium">
+                                {bill.description}
+                              </span>
                               <p className="text-xs text-slate-400">
                                 {bill.category && `${bill.category} • `}
-                                {bill.summary?.client?.name && `${bill.summary.client.name} • `}
+                                {bill.summary?.client?.name &&
+                                  `${bill.summary.client.name} • `}
                                 Summary #{bill.summary?.summaryNumber}
                               </p>
                             </div>
                           </div>
-                          <ArrowRight className={`size-3.5 ${activeIndex === idx ? "opacity-100" : "opacity-0"}`} />
+                          <ArrowRight
+                            className={`size-3.5 ${activeIndex === idx ? "opacity-100" : "opacity-0"}`}
+                          />
                         </button>
                       );
                     })}
@@ -345,7 +428,9 @@ export function SearchTrigger() {
 
   const handleClick = () => {
     // Dispatch keyboard event to trigger the dialog
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }));
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "k", ctrlKey: true }),
+    );
     setOpen(true);
   };
 

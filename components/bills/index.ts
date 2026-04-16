@@ -1,3 +1,3 @@
 export * from "./types";
-export * from "./WizardContext";
-export * from "./StepIndicator";
+export { WizardProvider, useWizard } from "./WizardContext";
+export { StepIndicator } from "./StepIndicator";

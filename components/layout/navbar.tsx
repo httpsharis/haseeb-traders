@@ -1,10 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { LogOut, Bell } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { SearchDialog, SearchTrigger } from "@/components/search-dialog";
+import { SearchDialog, SearchTrigger } from "@/components/layout/searchDialog";
 
 export function Navbar() {
   const { data: session } = useSession();
@@ -30,10 +31,12 @@ export function Navbar() {
           {session?.user && (
             <div className="ml-2 flex items-center gap-2">
               {session.user.image ? (
-                <img
+                <Image
                   src={session.user.image}
                   alt="Profile"
-                  className="size-7 rounded-full border border-slate-200 object-cover"
+                  width={28}
+                  height={28}
+                  className="rounded-full border border-slate-200 object-cover"
                 />
               ) : (
                 <div className="flex size-7 items-center justify-center rounded-full bg-slate-900 text-xs font-medium text-white">
