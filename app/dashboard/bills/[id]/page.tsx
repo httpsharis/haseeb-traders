@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { useWizard } from "@/components/bills";
-import { LineItem } from "@/components/bills/types";
+import { useBillDraft } from "@/hooks/useBillDraft";
+import type { LineItem } from "@/hooks/useBillDraft";
 
 // FIX: Added strict typing for the incoming database item to eliminate 'any'
 interface RawLineItem {
@@ -20,7 +20,7 @@ interface RawLineItem {
 export default function EditBillPage() {
   const router = useRouter();
   const params = useParams();
-  const { setData } = useWizard();
+  const { updateData } = useBillDraft();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -51,7 +51,7 @@ export default function EditBillPage() {
               }]; 
 
         // Seed the Wizard Context
-        setData({
+        updateData({
           clientId: bill.client?._id || bill.client || "existing-client",
           clientName: bill.client?.companyName || bill.client?.name || "Unknown Client",
           taxPeriod: bill.taxPeriod || "", 
@@ -75,7 +75,7 @@ export default function EditBillPage() {
     };
 
     fetchBill();
-  }, [params.id, setData, router]);
+  }, [params.id, updateData, router]);
 
   if (loading) {
     return (

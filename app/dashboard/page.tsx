@@ -89,7 +89,7 @@ export default function Dashboard() {
           pendingBills: statsData.pendingBills || allActivity.filter((b: ActivityItem) => b.status === "Draft" || b.status === "Pending" || !b.status).length,
           totalSummaries: statsData.totalSummaries || allActivity.filter((b: ActivityItem) => b.status === "Converted").length,
         });
-        
+
         setTopClients(sortedTopClients);
         setRecentActivity(combined);
         setLoading(false);
@@ -109,7 +109,7 @@ export default function Dashboard() {
           </p>
         </div>
         <Button
-          onClick={() => router.push("/dashboard/bills/new")}
+          onClick={() => router.push("/dashboard/bills/new?fresh=true")}
           className="bg-slate-900 hover:bg-slate-800 text-white font-bold h-10 px-5 rounded-lg transition-all"
         >
           <Plus className="mr-2 h-4 w-4" /> Create Bill
@@ -157,7 +157,7 @@ export default function Dashboard() {
 
       {/* ── Main Content Grid ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Left Side: Recent Activity */}
         <div className="lg:col-span-2">
           <RecentActivity data={recentActivity} loading={loading} />

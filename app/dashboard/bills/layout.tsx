@@ -1,7 +1,13 @@
-"use client";
+import { BillDraftProvider } from "@/hooks/useBillDraft";
 
-import { WizardProvider } from "@/components/bills";
-
-export default function BillsLayout({ children }: { children: React.ReactNode }) {
-  return <WizardProvider>{children}</WizardProvider>;
+export default function NewBillLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <BillDraftProvider>
+      <div className="min-h-screen bg-stone-50/30">{children}</div>
+    </BillDraftProvider>
+  );
 }

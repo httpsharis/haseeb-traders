@@ -30,7 +30,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
 
-      { title: "Create Bill", url: "/dashboard/bills/new", icon: FilePlus },
+      { title: "Create Bill", url: "/dashboard/bills/new?fresh=true", icon: FilePlus },
       // This is your new "Inbox/Cart" step 1
       { title: "Create Summary", url: "/dashboard/summary/new", icon: Clock }, 
     ],

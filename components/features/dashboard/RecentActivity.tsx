@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { PhantomLoader } from "@/components/ui/PhantomLoader";
 
 import type { ActivityItem } from "@/types";
-import { ActivityItem } from "../../types/index";
 
 export function RecentActivity({
   data,

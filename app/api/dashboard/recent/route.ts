@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     const limit = Math.min(20, Math.max(1, parseInt(searchParams.get("limit") || "10", 10)));
     const skip = (page - 1) * limit;
 
-    const [recentSummaries, totalSummaries] = await Promise.all([
+    const [recentSummaries, totalSummaries, recentBills] = await Promise.all([
       SummaryModel.aggregate([
         { $sort: { createdAt: -1 } },
         { $skip: skip },
@@ -76,10 +76,17 @@ export async function GET(request: Request) {
         }
       ]),
       SummaryModel.countDocuments(),
+      BillModel.find().sort({ createdAt: -1 }).limit(limit).populate("client", "name companyName"),
     ]);
 
     return NextResponse.json({
       summaries: recentSummaries,
+      bills: recentBills.map(b => {
+        // Hydrate clientName for the ActivityItem transformer
+        const obj = b.toObject();
+        obj.clientName = obj.client?.name || "";
+        return obj;
+      }),
       pagination: {
         page,
         limit,

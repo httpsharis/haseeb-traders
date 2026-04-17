@@ -5,7 +5,7 @@ import { Trophy, Users, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PhantomLoader } from "@/components/ui/PhantomLoader";
 
-import { TopClientsProps } from '@types/index';
+import type { TopClientsProps } from "@/types";
 
 
 export function TopClients({ data, loading }: TopClientsProps) {
