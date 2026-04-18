@@ -1,6 +1,6 @@
 "use client";
 
-import { createElement, createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -63,17 +63,15 @@ const defaultData: BillDraftData = {
 // ============================================================================
 // CONTEXT ENGINE
 // ============================================================================
-const BillDraftContext = createContext<BillDraftContextType | null>(null);
-
-// Inside hooks/useBillDraft.tsx
+const BillDraftContext = createContext<BillDraftContextType | undefined>(undefined);
 
 export function BillDraftProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<BillDraftData>(defaultData);
-  const [isLoaded, setIsLoaded] = useState(false); // Prevents hydration errors in Next.js
+  const [isLoaded, setIsLoaded] = useState(false);
 
-  // CACHE LOAD: Run once when the app starts
+  // CACHE LOAD: Async fix to prevent cascading renders!
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
+    const loadDraft = async () => {
       const savedDraft = localStorage.getItem("haseeb_bill_draft");
       if (savedDraft) {
         try {
@@ -83,9 +81,9 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
         }
       }
       setIsLoaded(true);
-    }, 0);
+    };
 
-    return () => clearTimeout(timeoutId);
+    loadDraft();
   }, []);
 
   // CACHE SAVE: Run every time 'data' changes
@@ -156,7 +154,7 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  // 4. Reset & Clear Cache (Call this after successful database save!)
+  // 4. Reset & Clear Cache
   const resetDraft = () => {
     setData(defaultData);
     localStorage.removeItem("haseeb_bill_draft");
@@ -165,14 +163,12 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
   // Don't render children until cache is checked to avoid UI flashing
   if (!isLoaded) return null;
 
-  return createElement(
-    BillDraftContext.Provider,
-    {
-      value: {
-        data, updateData, addItem, updateItem, removeItem, applyTaxesToItems, resetDraft
-      }
-    },
-    children
+  return (
+    <BillDraftContext.Provider
+      value={{ data, updateData, addItem, updateItem, removeItem, applyTaxesToItems, resetDraft }}
+    >
+      {children}
+    </BillDraftContext.Provider>
   );
 }
 
@@ -180,10 +176,9 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
 // CUSTOM HOOK
 // ============================================================================
 export function useBillDraft() {
-  const ctx = useContext(BillDraftContext);
-  if (!ctx) {
-    // This error triggers if you forgot to wrap your page in <BillDraftProvider />
+  const context = useContext(BillDraftContext);
+  if (context === undefined) {
     throw new Error("useBillDraft must be used within a BillDraftProvider");
   }
-  return ctx;
+  return context;
 }

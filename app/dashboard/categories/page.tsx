@@ -1,237 +1,216 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Pencil, Trash2, Tags, X, Check, ToggleLeft, ToggleRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Trash2, Tags, Loader2, Bookmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DataTable, ColumnDef } from "@/components/ui/DataPage";
 
-interface Category {
-  _id: string;
-  name: string;
-  isActive: boolean;
+// Adjust to match your exact Category schema
+export interface Category {
+    _id: string;
+    name: string;
+    description?: string;
+    createdAt?: string;
 }
 
-export default function CategoriesPage() {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+export default function AllCategoriesPage() {
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
+    const [showAddCategory, setShowAddCategory] = useState(false);
 
-  // Add modal
-  const [showAdd, setShowAdd] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [saving, setSaving] = useState(false);
+    const fetchCategories = async () => {
+        setIsLoading(true);
+        try {
+            const res = await fetch(`/api/categories`);
+            const data = await res.json();
+            setCategories(Array.isArray(data) ? data : data.data || []);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-  // Inline edit
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
+    useEffect(() => { fetchCategories(); }, []);
 
-  // Delete
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm("Are you sure you want to delete this category?")) return;
+        setIsDeleting(id);
+        try {
+            const res = await fetch(`/api/categories/${id}`, { method: "DELETE" });
+            if (res.ok) setCategories((prev) => prev.filter((c) => c._id !== id));
+        } finally {
+            setIsDeleting(null);
+        }
+    };
 
-  const fetchCategories = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/categories");
-      const data = await res.json();
-      setCategories(Array.isArray(data) ? data : []);
-    } catch {
-      console.error("Failed to fetch categories");
-    }
-    setLoading(false);
-  }, []);
+    const handleCategoryAdded = (newCategory: Category) => {
+        setCategories(prev => [...prev, newCategory]);
+        setShowAddCategory(false);
+    };
 
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
+    // ── DEFINE HOW THE COLUMNS SHOULD RENDER ──
+    const categoryColumns: ColumnDef<Category>[] = [
+        { 
+            header: "Category Name", 
+            className: "font-black text-stone-900 pl-6", 
+            cell: (c) => (
+                <div className="flex items-center">
+                    <Bookmark className="w-4 h-4 mr-2 text-primary/60" />
+                    {c.name}
+                </div>
+            )
+        },
+        { 
+            header: "Description", 
+            className: "font-medium text-stone-600", 
+            cell: (c) => c.description || <span className="text-stone-300 font-normal italic">No description</span> 
+        },
+        { 
+            header: "Date Added", 
+            className: "text-stone-500 font-medium text-xs w-40", 
+            cell: (c) => c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" }) : <span className="text-stone-300 font-normal italic">Legacy Record</span> 
+        },
+        {
+            header: "Actions",
+            className: "text-right pr-6 w-24",
+            cell: (c) => (
+                <div className="flex justify-end transition-opacity">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-stone-400 hover:text-red-600 hover:bg-red-50" onClick={(e) => handleDelete(c._id, e)}>
+                        {isDeleting === c._id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </Button>
+                </div>
+            )
+        }
+    ];
 
-  const filtered = categories.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
-  );
+    return (
+        <div className="p-6 md:p-10 max-w-7xl mx-auto pb-32 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-black text-stone-900 tracking-tight">Categories</h1>
+                    <p className="mt-1 font-medium text-stone-500">Manage item classifications for your bills.</p>
+                </div>
+                <Button 
+                    onClick={() => setShowAddCategory(true)}
+                    className="bg-primary hover:bg-primary/90 text-white font-bold h-11 px-6 rounded-xl shadow-md transition-all active:scale-95"
+                >
+                    <Plus className="mr-2 h-4 w-4" /> Add Category
+                </Button>
+            </div>
 
-  const handleAdd = async () => {
-    if (!newName.trim()) return;
-    setSaving(true);
-    try {
-      const res = await fetch("/api/categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim() }),
-      });
-      if (!res.ok) throw new Error("Failed");
-      setNewName("");
-      setShowAdd(false);
-      fetchCategories();
-    } catch {
-      alert("Failed to add category. Name may already exist.");
-    }
-    setSaving(false);
-  };
+            <DataTable 
+                data={categories}
+                columns={categoryColumns}
+                isLoading={isLoading}
+                searchPlaceholder="Search categories..."
+                emptyIcon={<Tags className="h-10 w-10 mx-auto" />}
+                emptyMessage="No categories found."
+                filterFn={(category, term) => 
+                    (category.name || "").toLowerCase().includes(term) || 
+                    (category.description || "").toLowerCase().includes(term)
+                }
+                sortOptions={[
+                    { label: "Newest First", value: "NEWEST" },
+                    { label: "Oldest First", value: "OLDEST" },
+                    { label: "Name (A-Z)", value: "A_Z" },
+                    { label: "Name (Z-A)", value: "Z_A" }
+                ]}
+                defaultSort="NEWEST"
+                sortFn={(a, b, sortOrder) => {
+                    if (sortOrder === "NEWEST") return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+                    if (sortOrder === "OLDEST") return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+                    if (sortOrder === "A_Z") return (a.name || "").localeCompare(b.name || "");
+                    if (sortOrder === "Z_A") return (b.name || "").localeCompare(a.name || "");
+                    return 0;
+                }}
+            />
 
-  const handleUpdate = async (id: string) => {
-    if (!editName.trim()) return;
-    try {
-      const res = await fetch(`/api/categories/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editName.trim() }),
-      });
-      if (!res.ok) throw new Error("Failed");
-      setEditId(null);
-      fetchCategories();
-    } catch {
-      alert("Failed to update category.");
-    }
-  };
-
-  const handleToggle = async (id: string, currentStatus: boolean) => {
-    try {
-      await fetch(`/api/categories/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !currentStatus }),
-      });
-      fetchCategories();
-    } catch {
-      alert("Failed to toggle category.");
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      await fetch(`/api/categories/${id}`, { method: "DELETE" });
-      setDeleteId(null);
-      fetchCategories();
-    } catch {
-      alert("Failed to delete category.");
-    }
-  };
-
-  return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Categories</h1>
-          <p className="mt-1 text-sm text-slate-500">Manage your product and service categories</p>
+            {/* INLINE MODAL POPUP */}
+            {showAddCategory && (
+                <AddCategoryPopup 
+                    onClose={() => setShowAddCategory(false)} 
+                    onSuccess={handleCategoryAdded} 
+                />
+            )}
         </div>
-        <Button onClick={() => setShowAdd(true)} className="gap-2 bg-[#ea580c] hover:bg-[#c2410c]">
-          <Plus className="size-4" /> Add Category
-        </Button>
-      </div>
+    );
+}
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-        <Input placeholder="Search categories..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 bg-white" />
-      </div>
+// ============================================================================
+// MODAL COMPONENT
+// ============================================================================
+function AddCategoryPopup({ onClose, onSuccess }: { onClose: () => void, onSuccess: (cat: Category) => void }) {
+    const [name, setName] = useState("");
+    const [description, setDescription] = useState("");
+    const [saving, setSaving] = useState(false);
 
-      {/* Table */}
-      <Card className="border shadow-sm">
-        <CardHeader className="border-b bg-slate-50/50 pb-4">
-          <div className="flex items-center gap-2">
-            <Tags className="size-5 text-[#ea580c]" />
-            <CardTitle className="text-base text-slate-800">
-              {loading ? "Loading..." : `${filtered.length} Categor${filtered.length !== 1 ? "ies" : "y"}`}
-            </CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">#</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead className="w-28 text-center">Status</TableHead>
-                <TableHead className="w-36 text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-4 w-6" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-16 mx-auto" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
-                  </TableRow>
-                ))
-              ) : filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="h-32 text-center text-slate-500">
-                    {search ? "No categories match your search." : "No categories yet. Add your first one above."}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtered.map((cat, idx) => (
-                  <TableRow key={cat._id}>
-                    <TableCell className="text-slate-500 text-sm">{idx + 1}</TableCell>
-                    <TableCell>
-                      {editId === cat._id ? (
-                        <div className="flex items-center gap-2">
-                          <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-8 max-w-xs" autoFocus onKeyDown={(e) => e.key === "Enter" && handleUpdate(cat._id)} />
-                          <Button size="icon" variant="ghost" className="size-7 text-green-600" onClick={() => handleUpdate(cat._id)}><Check className="size-3.5" /></Button>
-                          <Button size="icon" variant="ghost" className="size-7 text-slate-400" onClick={() => setEditId(null)}><X className="size-3.5" /></Button>
+    const handleCreate = async () => {
+        if (!name.trim()) return;
+        setSaving(true);
+        try {
+            const res = await fetch("/api/categories", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: name.trim(), description: description.trim() }),
+            });
+            const newCat = await res.json();
+            onSuccess(newCat);
+        } catch (err) {
+            console.error("Failed to create category", err);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden border border-stone-100 animate-in zoom-in-95 duration-200">
+                <div className="p-6">
+                    <div className="mb-6">
+                        <h2 className="text-xl font-black text-stone-900 tracking-tight">Add New Category</h2>
+                        <p className="text-sm font-medium text-stone-500 mt-1">Create a new classification tag.</p>
+                    </div>
+
+                    <div className="space-y-4 mb-8">
+                        <div>
+                            <label className="block text-[11px] font-bold text-stone-500 uppercase tracking-widest mb-2">Category Name</label>
+                            <Input
+                                placeholder="e.g. Labor, Materials, Logistics"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                autoFocus
+                                className="h-11 w-full bg-stone-50/50 border-stone-200 text-stone-900 placeholder:text-stone-400 focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary transition-all shadow-none rounded-lg font-medium"
+                            />
                         </div>
-                      ) : (
-                        <span className="font-medium text-slate-900">{cat.name}</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={cat.isActive ? "default" : "secondary"} className={cat.isActive ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-slate-100 text-slate-500"}>
-                        {cat.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {editId !== cat._id && (
-                        <div className="flex items-center justify-end gap-1">
-                          <Button size="icon" variant="ghost" className="size-7 text-slate-400 hover:text-blue-600" onClick={() => handleToggle(cat._id, cat.isActive)} title={cat.isActive ? "Deactivate" : "Activate"}>
-                            {cat.isActive ? <ToggleRight className="size-4" /> : <ToggleLeft className="size-4" />}
-                          </Button>
-                          <Button size="icon" variant="ghost" className="size-7 text-slate-400 hover:text-[#ea580c]" onClick={() => { setEditId(cat._id); setEditName(cat.name); }}>
-                            <Pencil className="size-3.5" />
-                          </Button>
-                          {deleteId === cat._id ? (
-                            <div className="flex items-center gap-1">
-                              <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => handleDelete(cat._id)}>Confirm</Button>
-                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setDeleteId(null)}>Cancel</Button>
-                            </div>
-                          ) : (
-                            <Button size="icon" variant="ghost" className="size-7 text-slate-400 hover:text-red-600" onClick={() => setDeleteId(cat._id)}>
-                              <Trash2 className="size-3.5" />
-                            </Button>
-                          )}
+                        <div>
+                            <label className="block text-[11px] font-bold text-stone-500 uppercase tracking-widest mb-2">Description (Optional)</label>
+                            <Input
+                                placeholder="Brief explanation of this category..."
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && name.trim()) {
+                                        e.preventDefault();
+                                        handleCreate();
+                                    }
+                                }}
+                                className="h-11 w-full bg-stone-50/50 border-stone-200 text-stone-900 placeholder:text-stone-400 focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary transition-all shadow-none rounded-lg font-medium"
+                            />
                         </div>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                    </div>
 
-      {/* Add Modal */}
-      {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <Card className="w-full max-w-md mx-4">
-            <CardHeader><CardTitle>Add New Category</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <Input placeholder="e.g. Construction, Electronics..." value={newName} onChange={(e) => setNewName(e.target.value)} autoFocus onKeyDown={(e) => e.key === "Enter" && handleAdd()} />
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => { setShowAdd(false); setNewName(""); }}>Cancel</Button>
-                <Button onClick={handleAdd} disabled={saving || !newName.trim()} className="bg-[#ea580c] hover:bg-[#c2410c]">{saving ? "Adding..." : "Add Category"}</Button>
-              </div>
-            </CardContent>
-          </Card>
+                    <div className="flex justify-end gap-3">
+                        <Button variant="ghost" onClick={onClose} className="h-10 px-4 text-stone-500 hover:text-stone-900 hover:bg-stone-100 font-bold rounded-lg shadow-none">
+                            Cancel
+                        </Button>
+                        <Button onClick={handleCreate} disabled={saving || !name.trim()} className="h-10 px-6 font-bold shadow-none rounded-lg disabled:opacity-50 bg-primary text-white hover:bg-primary/90">
+                            {saving ? "Saving..." : "Save Category"}
+                        </Button>
+                    </div>
+                </div>
+            </div>
         </div>
-      )}
-    </div>
-  );
+    );
 }

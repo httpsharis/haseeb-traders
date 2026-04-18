@@ -1,256 +1,254 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Pencil, Trash2, Receipt, X, Check, ToggleLeft, ToggleRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Trash2, Loader2, Percent, Calculator, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DataTable, ColumnDef } from "@/components/ui/DataPage";
 
-interface TaxRule {
-  _id: string;
-  name: string;
-  percentage: number;
-  isActive: boolean;
+// ✅ UPDATED to match your backend schema exactly!
+export interface TaxRule {
+    _id: string;
+    name: string; 
+    percentage: number; 
+    target?: string;
+    impact?: string;
+    isActive?: boolean;
+    createdAt?: string;
 }
 
-export default function TaxRulesPage() {
-  const [rules, setRules] = useState<TaxRule[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+export default function AllTaxTypesPage() {
+    const [taxRules, setTaxRules] = useState<TaxRule[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
+    const [showAddRule, setShowAddRule] = useState(false);
 
-  // Add modal
-  const [showAdd, setShowAdd] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newPercentage, setNewPercentage] = useState("");
-  const [saving, setSaving] = useState(false);
+    const fetchTaxRules = async () => {
+        setIsLoading(true);
+        try {
+            // ✅ UPDATED to your exact API endpoint
+            const res = await fetch(`/api/tax-types`);
+            const data = await res.json();
+            setTaxRules(Array.isArray(data) ? data : data.data || []);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-  // Inline edit
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editPercentage, setEditPercentage] = useState("");
+    useEffect(() => { fetchTaxRules(); }, []);
 
-  // Delete
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm("Are you sure you want to delete this tax type?")) return;
+        setIsDeleting(id);
+        try {
+            // ✅ UPDATED endpoint
+            const res = await fetch(`/api/tax-types/${id}`, { method: "DELETE" });
+            if (res.ok) setTaxRules((prev) => prev.filter((t) => t._id !== id));
+        } finally {
+            setIsDeleting(null);
+        }
+    };
 
-  const fetchRules = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/tax-types");
-      const data = await res.json();
-      setRules(Array.isArray(data) ? data : []);
-    } catch {
-      console.error("Failed to fetch tax rules");
-    }
-    setLoading(false);
-  }, []);
+    const handleRuleAdded = (newRule: TaxRule) => {
+        setTaxRules(prev => [...prev, newRule]);
+        setShowAddRule(false);
+    };
 
-  useEffect(() => {
-    fetchRules();
-  }, [fetchRules]);
+    // ── DEFINE HOW THE COLUMNS SHOULD RENDER ──
+    const taxColumns: ColumnDef<TaxRule>[] = [
+        { 
+            header: "Tax Name", 
+            className: "font-black text-stone-900 pl-6 w-1/4", 
+            cell: (t) => (
+                <div className="flex items-center">
+                    <Calculator className="w-4 h-4 mr-2 text-primary/60" />
+                    {t.name}
+                </div>
+            )
+        },
+        { 
+            header: "Rate (%)", 
+            className: "font-bold text-stone-900 w-32", 
+            cell: (t) => (
+                <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-black bg-stone-100 text-stone-700 border border-stone-200">
+                    {t.percentage}%
+                </span>
+            )
+        },
+        { 
+            header: "Status", 
+            className: "w-32", 
+            cell: (t) => {
+                // ✅ NEW: Sleek status badge based on your isActive boolean
+                const active = t.isActive !== false; // Defaults to true if undefined
+                return (
+                    <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${
+                        active ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-stone-50 text-stone-500 border border-stone-200"
+                    }`}>
+                        {active ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <XCircle className="w-3 h-3 mr-1" />}
+                        {active ? "Active" : "Disabled"}
+                    </span>
+                )
+            }
+        },
+        { 
+            header: "Engine Rules", 
+            className: "text-stone-500 font-medium text-xs", 
+            cell: (t) => (
+                <div className="flex flex-col">
+                    <span>{t.impact === "Subtract" ? "Deducts from" : "Adds to"} <strong className="text-stone-700">{t.target || "Base Amount"}</strong></span>
+                </div>
+            )
+        },
+        {
+            header: "Actions",
+            className: "text-right pr-6 w-24",
+            cell: (t) => (
+                <div className="flex justify-end transition-opacity">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-stone-400 hover:text-red-600 hover:bg-red-50" onClick={(e) => handleDelete(t._id, e)}>
+                        {isDeleting === t._id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </Button>
+                </div>
+            )
+        }
+    ];
 
-  const filtered = rules.filter((r) =>
-    r.name.toLowerCase().includes(search.toLowerCase())
-  );
+    return (
+        <div className="p-6 md:p-10 max-w-7xl mx-auto pb-32 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-black text-stone-900 tracking-tight">Tax Types</h1>
+                    <p className="mt-1 font-medium text-stone-500">Manage tax rules and deduction percentages.</p>
+                </div>
+                <Button 
+                    onClick={() => setShowAddRule(true)}
+                    className="bg-primary hover:bg-primary/90 text-white font-bold h-11 px-6 rounded-xl shadow-md transition-all active:scale-95"
+                >
+                    <Plus className="mr-2 h-4 w-4" /> Add Tax Type
+                </Button>
+            </div>
 
-  const handleAdd = async () => {
-    if (!newName.trim() || !newPercentage) return;
-    setSaving(true);
-    try {
-      const res = await fetch("/api/tax-types", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim(), percentage: parseFloat(newPercentage) }),
-      });
-      if (!res.ok) throw new Error("Failed");
-      setNewName("");
-      setNewPercentage("");
-      setShowAdd(false);
-      fetchRules();
-    } catch {
-      alert("Failed to add tax rule. Name may already exist.");
-    }
-    setSaving(false);
-  };
+            <DataTable 
+                data={taxRules}
+                columns={taxColumns}
+                isLoading={isLoading}
+                searchPlaceholder="Search tax names..."
+                emptyIcon={<Percent className="h-10 w-10 mx-auto" />}
+                emptyMessage="No tax types found."
+                filterFn={(rule, term) => 
+                    (rule.name || "").toLowerCase().includes(term)
+                }
+                sortOptions={[
+                    { label: "Name (A-Z)", value: "A_Z" },
+                    { label: "Name (Z-A)", value: "Z_A" },
+                    { label: "Rate (High to Low)", value: "RATE_DESC" },
+                    { label: "Rate (Low to High)", value: "RATE_ASC" }
+                ]}
+                defaultSort="A_Z"
+                sortFn={(a, b, sortOrder) => {
+                    if (sortOrder === "A_Z") return (a.name || "").localeCompare(b.name || "");
+                    if (sortOrder === "Z_A") return (b.name || "").localeCompare(a.name || "");
+                    if (sortOrder === "RATE_DESC") return (b.percentage || 0) - (a.percentage || 0);
+                    if (sortOrder === "RATE_ASC") return (a.percentage || 0) - (b.percentage || 0);
+                    return 0;
+                }}
+            />
 
-  const handleUpdate = async (id: string) => {
-    if (!editName.trim() || !editPercentage) return;
-    try {
-      const res = await fetch(`/api/tax-types/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editName.trim(), percentage: parseFloat(editPercentage) }),
-      });
-      if (!res.ok) throw new Error("Failed");
-      setEditId(null);
-      fetchRules();
-    } catch {
-      alert("Failed to update tax rule.");
-    }
-  };
-
-  const handleToggle = async (id: string, current: boolean) => {
-    try {
-      await fetch(`/api/tax-types/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !current }),
-      });
-      fetchRules();
-    } catch {
-      alert("Failed to toggle tax rule.");
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      await fetch(`/api/tax-types/${id}`, { method: "DELETE" });
-      setDeleteId(null);
-      fetchRules();
-    } catch {
-      alert("Failed to delete tax rule.");
-    }
-  };
-
-  return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Tax Rules</h1>
-          <p className="mt-1 text-sm text-slate-500">Define default tax names and percentages</p>
+            {showAddRule && (
+                <AddTaxRulePopup 
+                    onClose={() => setShowAddRule(false)} 
+                    onSuccess={handleRuleAdded} 
+                />
+            )}
         </div>
-        <Button onClick={() => setShowAdd(true)} className="gap-2 bg-[#ea580c] hover:bg-[#c2410c]">
-          <Plus className="size-4" /> Add Tax Rule
-        </Button>
-      </div>
+    );
+}
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-        <Input placeholder="Search tax rules..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 bg-white" />
-      </div>
+// ============================================================================
+// MODAL COMPONENT
+// ============================================================================
+function AddTaxRulePopup({ onClose, onSuccess }: { onClose: () => void, onSuccess: (rule: TaxRule) => void }) {
+    const [name, setName] = useState("");
+    const [percentage, setPercentage] = useState("");
+    const [saving, setSaving] = useState(false);
 
-      {/* Table */}
-      <Card className="border shadow-sm">
-        <CardHeader className="border-b bg-slate-50/50 pb-4">
-          <div className="flex items-center gap-2">
-            <Receipt className="size-5 text-[#ea580c]" />
-            <CardTitle className="text-base text-slate-800">
-              {loading ? "Loading..." : `${filtered.length} Tax Rule${filtered.length !== 1 ? "s" : ""}`}
-            </CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">#</TableHead>
-                <TableHead>Tax Name</TableHead>
-                <TableHead className="w-28 text-right">Rate (%)</TableHead>
-                <TableHead className="w-28 text-center">Status</TableHead>
-                <TableHead className="w-36 text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-4 w-6" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-16 mx-auto" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
-                  </TableRow>
-                ))
-              ) : filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center text-slate-500">
-                    {search ? "No tax rules match your search." : "No tax rules yet. Add your first one above."}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtered.map((rule, idx) => (
-                  <TableRow key={rule._id}>
-                    <TableCell className="text-slate-500 text-sm">{idx + 1}</TableCell>
-                    <TableCell>
-                      {editId === rule._id ? (
-                        <div className="flex items-center gap-2">
-                          <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-8 w-36" autoFocus />
-                          <Input type="number" value={editPercentage} onChange={(e) => setEditPercentage(e.target.value)} className="h-8 w-20" step="0.1" />
-                          <Button size="icon" variant="ghost" className="size-7 text-green-600" onClick={() => handleUpdate(rule._id)}><Check className="size-3.5" /></Button>
-                          <Button size="icon" variant="ghost" className="size-7 text-slate-400" onClick={() => setEditId(null)}><X className="size-3.5" /></Button>
-                        </div>
-                      ) : (
-                        <span className="font-medium text-slate-900">{rule.name}</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {editId !== rule._id && (
-                        <span className="font-mono text-sm font-semibold text-slate-700">{rule.percentage}%</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={rule.isActive ? "default" : "secondary"} className={rule.isActive ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-slate-100 text-slate-500"}>
-                        {rule.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {editId !== rule._id && (
-                        <div className="flex items-center justify-end gap-1">
-                          <Button size="icon" variant="ghost" className="size-7 text-slate-400 hover:text-blue-600" onClick={() => handleToggle(rule._id, rule.isActive)}>
-                            {rule.isActive ? <ToggleRight className="size-4" /> : <ToggleLeft className="size-4" />}
-                          </Button>
-                          <Button size="icon" variant="ghost" className="size-7 text-slate-400 hover:text-[#ea580c]" onClick={() => { setEditId(rule._id); setEditName(rule.name); setEditPercentage(String(rule.percentage)); }}>
-                            <Pencil className="size-3.5" />
-                          </Button>
-                          {deleteId === rule._id ? (
-                            <div className="flex items-center gap-1">
-                              <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => handleDelete(rule._id)}>Confirm</Button>
-                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setDeleteId(null)}>Cancel</Button>
+    const handleCreate = async () => {
+        if (!name.trim() || !percentage) return;
+        setSaving(true);
+        try {
+            // ✅ UPDATED endpoint
+            const res = await fetch("/api/tax-types", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    name: name.trim().toUpperCase(),
+                    percentage: parseFloat(percentage),
+                    isActive: true, // Explicitly tell the backend this is an active tax
+                }),
+            });
+            const newRule = await res.json();
+            onSuccess(newRule);
+        } catch (err) {
+            console.error("Failed to create tax type", err);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden border border-stone-100 animate-in zoom-in-95 duration-200">
+                <div className="p-6">
+                    <div className="mb-6">
+                        <h2 className="text-xl font-black text-stone-900 tracking-tight">Add New Tax Type</h2>
+                        <p className="text-sm font-medium text-stone-500 mt-1">Create a preset percentage to apply to items.</p>
+                    </div>
+
+                    <div className="space-y-4 mb-8">
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="col-span-2">
+                                <label className="block text-[11px] font-bold text-stone-500 uppercase tracking-widest mb-2">Tax Name</label>
+                                <Input
+                                    placeholder="e.g. GST, WHT"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    autoFocus
+                                    className="h-11 w-full bg-stone-50/50 border-stone-200 text-stone-900 placeholder:text-stone-400 focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary transition-all shadow-none rounded-lg font-medium uppercase"
+                                />
                             </div>
-                          ) : (
-                            <Button size="icon" variant="ghost" className="size-7 text-slate-400 hover:text-red-600" onClick={() => setDeleteId(rule._id)}>
-                              <Trash2 className="size-3.5" />
-                            </Button>
-                          )}
+                            <div className="col-span-1">
+                                <label className="block text-[11px] font-bold text-stone-500 uppercase tracking-widest mb-2">Rate (%)</label>
+                                <div className="relative">
+                                    <Input
+                                        type="number"
+                                        placeholder="18"
+                                        value={percentage}
+                                        onChange={(e) => setPercentage(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && name.trim() && percentage) {
+                                                e.preventDefault();
+                                                handleCreate();
+                                            }
+                                        }}
+                                        className="h-11 w-full bg-stone-50/50 border-stone-200 text-stone-900 placeholder:text-stone-400 focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary transition-all shadow-none rounded-lg font-black pr-8"
+                                    />
+                                    <Percent className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+                                </div>
+                            </div>
                         </div>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                    </div>
 
-      {/* Add Modal */}
-      {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <Card className="w-full max-w-md mx-4">
-            <CardHeader><CardTitle>Add New Tax Rule</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Tax Name</label>
-                <Input placeholder="e.g. GST, Income Tax, PST..." value={newName} onChange={(e) => setNewName(e.target.value)} autoFocus />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Default Rate (%)</label>
-                <Input type="number" placeholder="e.g. 18" value={newPercentage} onChange={(e) => setNewPercentage(e.target.value)} step="0.1" onKeyDown={(e) => e.key === "Enter" && handleAdd()} />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => { setShowAdd(false); setNewName(""); setNewPercentage(""); }}>Cancel</Button>
-                <Button onClick={handleAdd} disabled={saving || !newName.trim() || !newPercentage} className="bg-[#ea580c] hover:bg-[#c2410c]">{saving ? "Adding..." : "Add Tax Rule"}</Button>
-              </div>
-            </CardContent>
-          </Card>
+                    <div className="flex justify-end gap-3">
+                        <Button variant="ghost" onClick={onClose} className="h-10 px-4 text-stone-500 hover:text-stone-900 hover:bg-stone-100 font-bold rounded-lg shadow-none">
+                            Cancel
+                        </Button>
+                        <Button onClick={handleCreate} disabled={saving || !name.trim() || !percentage} className="h-10 px-6 font-bold shadow-none rounded-lg disabled:opacity-50 bg-primary text-white hover:bg-primary/90">
+                            {saving ? "Saving..." : "Save Rule"}
+                        </Button>
+                    </div>
+                </div>
+            </div>
         </div>
-      )}
-    </div>
-  );
+    );
 }

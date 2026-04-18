@@ -1,357 +1,192 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, Search, Pencil, Trash2, Users, X, Check, Activity, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Trash2, Users, Building2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DataTable, ColumnDef } from "@/components/ui/DataPage";
+import { Client } from "@/types";
 
-interface Client {
-  _id: string;
-  name?: string;
-  companyName?: string;
-  completionRate?: number; 
-  status?: "Active" | "Inactive"; 
-}
+export default function AllClientsPage() {
+    const [clients, setClients] = useState<Client[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
+    const [showAddClient, setShowAddClient] = useState(false); // ✅ Added Modal State
 
-function extractData<T>(data: unknown): T[] {
-  if (Array.isArray(data)) return data as T[];
-  if (typeof data === 'object' && data !== null) {
-    const d = data as Record<string, unknown>;
-    if (Array.isArray(d.data)) return d.data as T[];
-    if (Array.isArray(d.docs)) return d.docs as T[];
-  }
-  return [];
-}
+    const fetchClients = async () => {
+        setIsLoading(true);
+        try {
+            const res = await fetch(`/api/clients`);
+            const data = await res.json();
+            setClients(Array.isArray(data) ? data : data.data || []);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-const ClientProgress = ({ value = 0 }: { value?: number }) => (
-  <div className="flex items-center gap-3 w-full max-w-[140px]">
-    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-      <div
-        className="h-full bg-[#ea580c] transition-all duration-500 ease-in-out"
-        style={{ width: `${value}%` }}
-      />
-    </div>
-    <span className="text-xs font-bold text-slate-500 w-8">{value}%</span>
-  </div>
-);
+    useEffect(() => { fetchClients(); }, []);
 
-const Avatar = ({ name }: { name: string }) => {
-  const initial = name ? name.charAt(0).toUpperCase() : "?";
-  return (
-    <div className="w-10 h-10 rounded-full bg-orange-50 border border-orange-100 flex items-center justify-center shrink-0">
-      <span className="text-lg font-black text-[#ea580c]">{initial}</span>
-    </div>
-  );
-};
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm("Are you sure you want to delete this client?")) return;
+        setIsDeleting(id);
+        try {
+            const res = await fetch(`/api/clients/${id}`, { method: "DELETE" });
+            if (res.ok) setClients((prev) => prev.filter((c) => c._id !== id));
+        } finally {
+            setIsDeleting(null);
+        }
+    };
 
-export default function ClientsPage() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+    const handleClientAdded = (newClient: Client) => {
+        setClients(prev => [...prev, newClient]);
+        setShowAddClient(false);
+    };
 
-  const [showAdd, setShowAdd] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [saving, setSaving] = useState(false);
+    // ── DEFINE HOW THE COLUMNS SHOULD RENDER ──
+    const clientColumns: ColumnDef<Client>[] = [
+        { 
+            header: "Client Name", 
+            className: "font-black text-stone-900 pl-6", 
+            cell: (c) => c.name 
+        },
+        { 
+            header: "Date Added", 
+            // ✅ DESIGN FIX: Added w-40 and text-xs to make it sleek and prevent stretching
+            className: "font-bold text-stone-600", 
+            cell: (c) => c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" }) : <span className="text-stone-300 font-normal italic">Legacy Record</span> 
+        },
+        {
+            header: "Actions",
+            // ✅ DESIGN FIX: Locked width to 24
+            className: "text-right pr-6 w-24",
+            cell: (c) => (
+                <div className="flex justify-end transition-opacity">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-stone-400 hover:text-red-600 hover:bg-red-50" onClick={(e) => handleDelete(c._id, e)}>
+                        {isDeleting === c._id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </Button>
+                </div>
+            )
+        }
+    ];
 
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const fetchClients = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/clients?t=${Date.now()}`);
-      const data = await res.json();
-
-      const extracted = extractData<Client>(data);
-      
-      const enhancedData = extracted.map((c) => ({
-        ...c,
-        completionRate: c.completionRate ?? Math.floor(Math.random() * 60) + 40, 
-        status: c.status ?? (Math.random() > 0.2 ? "Active" : "Inactive")
-      }));
-      
-      setClients(enhancedData);
-    } catch (error) {
-      console.error("Failed to fetch clients", error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchClients();
-  }, [fetchClients]);
-
-  const filteredClients = useMemo(() => {
-    const q = search.toLowerCase();
-    if (!q) return clients;
-    return clients.filter(c => 
-      (c.name || "").toLowerCase().includes(q) || 
-      (c.companyName || "").toLowerCase().includes(q)
-    );
-  }, [clients, search]);
-
-  const handleAdd = async () => {
-    if (!newName.trim()) return;
-    setSaving(true);
-    try {
-      const res = await fetch("/api/clients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          name: newName, 
-          companyName: newName
-        }),
-      });
-      if (res.ok) {
-        setNewName("");
-        setShowAdd(false);
-        fetchClients();
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleUpdate = async (id: string) => {
-    if (!editName.trim()) return;
-    try {
-      const res = await fetch(`/api/clients`, {
-        method: "PUT", 
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ _id: id, name: editName }),
-      });
-      if (res.ok) {
-        setEditId(null);
-        fetchClients();
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    setIsDeleting(true);
-    try {
-      const res = await fetch(`/api/clients?id=${id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        setDeleteId(null);
-        fetchClients();
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  return (
-    <div className="p-6 md:p-10 max-w-[1400px] mx-auto pb-32 space-y-8">
-
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight text-slate-900">Client Directory</h1>
-          <p className="mt-1 font-medium text-slate-500">Manage your active clients and track project progress.</p>
-        </div>
-        <Button onClick={() => setShowAdd(true)} className="gap-2 h-12 px-8 bg-[#ea580c] hover:bg-[#d44d0a] shadow-md shadow-orange-500/10 font-black rounded-xl text-base transition-all shrink-0">
-          <Plus className="size-5" /> Add Client
-        </Button>
-      </div>
-
-      <Card className="border border-slate-200 shadow-sm overflow-hidden rounded-2xl">
-        <CardHeader className="border-b bg-slate-50/50 pb-5 pt-6 px-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm shrink-0">
-                <Users className="size-5 text-[#ea580c]" />
-              </div>
-              <CardTitle className="text-xl font-black text-slate-800">
-                {loading ? "Loading Directory..." : `Active Directory (${filteredClients.length})`}
-              </CardTitle>
+    return (
+        <div className="p-6 md:p-10 max-w-7xl mx-auto pb-32 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-black text-stone-900 tracking-tight">All Clients</h1>
+                    <p className="mt-1 font-medium text-stone-500">Manage your customer database.</p>
+                </div>
+                {/* ✅ FUNCTIONAL BUTTON */}
+                <Button 
+                    onClick={() => setShowAddClient(true)}
+                    className="bg-primary hover:bg-primary/90 text-white font-bold h-11 px-6 rounded-xl shadow-md transition-all active:scale-95"
+                >
+                    <Plus className="mr-2 h-4 w-4" /> Add Client
+                </Button>
             </div>
 
-            <div className="relative w-full md:max-w-sm">
-              <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                placeholder="Search clients..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 h-11 bg-white border-slate-200 focus-visible:ring-[#ea580c] rounded-xl font-medium shadow-sm"
-              />
-            </div>
-          </div>
-        </CardHeader>
+            <DataTable 
+                data={clients}
+                columns={clientColumns}
+                isLoading={isLoading}
+                searchPlaceholder="Search clients or companies..."
+                emptyIcon={<Users className="h-10 w-10 mx-auto" />}
+                emptyMessage="No clients found."
+                filterFn={(client, term) => 
+                    (client.name || "").toLowerCase().includes(term) || 
+                    (client.companyName || "").toLowerCase().includes(term)
+                }
+                sortOptions={[
+                    { label: "Newest First", value: "NEWEST" },
+                    { label: "Oldest First", value: "OLDEST" },
+                    { label: "Name (A-Z)", value: "A_Z" },
+                    { label: "Name (Z-A)", value: "Z_A" }
+                ]}
+                defaultSort="NEWEST"
+                sortFn={(a, b, sortOrder) => {
+                    if (sortOrder === "NEWEST") return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+                    if (sortOrder === "OLDEST") return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+                    if (sortOrder === "A_Z") return (a.name || "").localeCompare(b.name || "");
+                    if (sortOrder === "Z_A") return (b.name || "").localeCompare(a.name || "");
+                    return 0;
+                }}
+            />
 
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-b-slate-100">
-                  <TableHead className="w-[45%] text-xs font-black text-slate-500 uppercase tracking-widest py-5 px-6 pl-8">Client Name</TableHead>
-                  <TableHead className="w-[20%] text-xs font-black text-slate-500 uppercase tracking-widest py-5 px-6">Status</TableHead>
-                  <TableHead className="w-[20%] text-xs font-black text-slate-500 uppercase tracking-widest py-5 px-6">Progress</TableHead>
-                  <TableHead className="w-[15%] text-right text-xs font-black text-slate-500 uppercase tracking-widest py-5 px-6 pr-8">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className="divide-y divide-slate-100">
-                {loading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="pl-8 py-5 flex items-center gap-4">
-                        <Skeleton className="h-10 w-10 rounded-full" />
-                        <Skeleton className="h-5 w-40" />
-                      </TableCell>
-                      <TableCell className="px-6 py-5"><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
-                      <TableCell className="px-6 py-5"><Skeleton className="h-2 w-28 rounded-full" /></TableCell>
-                      <TableCell className="px-6 py-5 pr-8"><Skeleton className="h-9 w-20 ml-auto" /></TableCell>
-                    </TableRow>
-                  ))
-                ) : filteredClients.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="h-64 text-center text-slate-500">
-                      <Activity className="size-10 mx-auto mb-4 text-slate-300" />
-                      <p className="font-black text-slate-900 text-lg">No clients found</p>
-                      <p className="text-sm font-medium mt-1 text-slate-500">{search ? "Try adjusting your search terms." : "Add your first client to get started."}</p>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredClients.map((client) => {
-                    const displayName = client.name || client.companyName || "Unknown Client";
-                    
-                    return (
-                    <TableRow key={client._id} className="hover:bg-slate-50/50 transition-colors group">
-                      
-                      <TableCell className="py-4 pl-8 pr-6">
-                        <div className="flex items-center gap-4">
-                          <Avatar name={displayName} />
-                          {editId === client._id ? (
-                            <div className="flex items-center gap-2 animate-in fade-in">
-                              <Input
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                                className="h-9 max-w-[200px] bg-white border-[#ea580c] focus-visible:ring-2 focus-visible:ring-orange-200 font-bold"
-                                autoFocus
-                                onKeyDown={(e) => e.key === "Enter" && handleUpdate(client._id)}
-                              />
-                              <Button size="icon" variant="ghost" className="size-9 text-emerald-600 hover:bg-emerald-50 rounded-lg shrink-0" onClick={() => handleUpdate(client._id)}>
-                                <Check className="size-4" />
-                              </Button>
-                              <Button size="icon" variant="ghost" className="size-9 text-slate-400 hover:bg-slate-100 rounded-lg shrink-0" onClick={() => setEditId(null)}>
-                                <X className="size-4" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <span className="font-bold text-slate-900 text-base">{displayName}</span>
-                          )}
-                        </div>
-                      </TableCell>
-
-                      <TableCell className="py-4 px-6">
-                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-black border uppercase tracking-wider ${
-                          client.status === "Active"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-slate-50 text-slate-500 border-slate-200"
-                          }`}>
-                          {client.status}
-                        </span>
-                      </TableCell>
-
-                      <TableCell className="py-4 px-6">
-                        <ClientProgress value={client.completionRate} />
-                      </TableCell>
-
-                      <TableCell className="text-right px-6 py-4 pr-8">
-                        {editId !== client._id && (
-                          <div className="flex items-center justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                            {deleteId === client._id ? (
-                              <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4">
-                                <Button size="sm" className="h-8 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-md shadow-sm" disabled={isDeleting} onClick={() => handleDelete(client._id)}>
-                                  {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : "Delete"}
-                                </Button>
-                                <Button size="sm" variant="outline" className="h-8 text-xs font-bold bg-white text-slate-600 rounded-md shadow-sm" disabled={isDeleting} onClick={() => setDeleteId(null)}>
-                                  Cancel
-                                </Button>
-                              </div>
-                            ) : (
-                              <>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="size-9 text-slate-400 hover:text-[#ea580c] hover:bg-orange-50 rounded-lg transition-colors"
-                                  onClick={() => { setEditId(client._id); setEditName(displayName); }}
-                                >
-                                  <Pencil className="size-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="size-9 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  onClick={() => setDeleteId(client._id)}
-                                >
-                                  <Trash2 className="size-4" />
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Upgraded snappy modal animation */}
-      {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-150 ease-out">
-          <Card className="w-full max-w-md mx-4 shadow-2xl border-0 ring-1 ring-slate-900/5 animate-in zoom-in-95 fade-in duration-150 ease-out">
-            <CardHeader className="border-b border-slate-100 bg-white rounded-t-2xl px-8 py-6">
-              <CardTitle className="text-2xl font-black text-slate-900">Add New Client</CardTitle>
-            </CardHeader>
-            <CardContent className="p-8 space-y-5 bg-slate-50 rounded-b-2xl">
-              
-              <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-slate-500 ml-1">Client Name</label>
-                <Input
-                  placeholder="e.g. Haseeb Traders"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  autoFocus
-                  onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-                  className="bg-white focus-visible:ring-[#ea580c] focus-visible:border-[#ea580c] h-12 border-slate-200 rounded-xl font-medium shadow-sm text-base"
+            {/* ✅ INLINE MODAL POPUP */}
+            {showAddClient && (
+                <AddClientPopup 
+                    onClose={() => setShowAddClient(false)} 
+                    onSuccess={handleClientAdded} 
                 />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <Button variant="outline" className="font-bold text-slate-600 border-slate-200 h-11 px-6 rounded-xl hover:bg-slate-100" onClick={() => { setShowAdd(false); setNewName(""); }}>
-                  Cancel
-                </Button>
-                <Button onClick={handleAdd} disabled={saving || !newName.trim()} className="bg-[#ea580c] hover:bg-[#d44d0a] font-black h-11 px-8 rounded-xl shadow-sm">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  {saving ? "Saving..." : "Save Client"}
-                </Button>
-              </div>
-
-            </CardContent>
-          </Card>
+            )}
         </div>
-      )}
-    </div>
-  );
+    );
+}
+
+// ============================================================================
+// MODAL COMPONENT (Reused from Step 1)
+// ============================================================================
+function AddClientPopup({ onClose, onSuccess }: { onClose: () => void, onSuccess: (client: Client) => void }) {
+    const [newClientName, setNewClientName] = useState("");
+    const [saving, setSaving] = useState(false);
+
+    const handleCreateClient = async () => {
+        if (!newClientName.trim()) return;
+        setSaving(true);
+        try {
+            const res = await fetch("/api/clients", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: newClientName.trim() }),
+            });
+            const newClient = await res.json();
+            onSuccess(newClient);
+        } catch (err) {
+            console.error("Failed to create client", err);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden border border-stone-100 animate-in zoom-in-95 duration-200">
+                <div className="p-6">
+                    <div className="mb-6">
+                        <h2 className="text-xl font-black text-stone-900 tracking-tight">Add New Client</h2>
+                        <p className="text-sm font-medium text-stone-500 mt-1">Create a new profile for your database.</p>
+                    </div>
+
+                    <div className="mb-8">
+                        <label className="block text-[11px] font-bold text-stone-500 uppercase tracking-widest mb-2">
+                            Client Name
+                        </label>
+                        <Input
+                            placeholder="e.g. Acme Corp"
+                            value={newClientName}
+                            onChange={(e) => setNewClientName(e.target.value)}
+                            autoFocus
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && newClientName.trim()) {
+                                    e.preventDefault();
+                                    handleCreateClient();
+                                }
+                            }}
+                            className="h-11 w-full bg-stone-50/50 border-stone-200 text-stone-900 placeholder:text-stone-400 focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary transition-all shadow-none rounded-lg font-medium"
+                        />
+                    </div>
+
+                    <div className="flex justify-end gap-3">
+                        <Button variant="ghost" onClick={onClose} className="h-10 px-4 text-stone-500 hover:text-stone-900 hover:bg-stone-100 font-bold rounded-lg shadow-none">
+                            Cancel
+                        </Button>
+                        <Button onClick={handleCreateClient} disabled={saving || !newClientName.trim()} className="h-10 px-6 font-bold shadow-none rounded-lg disabled:opacity-50 bg-primary text-white hover:bg-primary/90">
+                            {saving ? "Saving..." : "Save Client"}
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 }

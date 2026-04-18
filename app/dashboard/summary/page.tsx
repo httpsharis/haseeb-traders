@@ -1,231 +1,188 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Plus, Trash2, FileText, Loader2, ExternalLink, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Loader2, Plus, Search, FileText, Trash2, Printer, Edit } from "lucide-react";
+import { DataTable, ColumnDef } from "@/components/ui/DataPage";
+// import { Summary } from '../../../types/summary';
 
-// --- STRICT TYPES ---
-interface ClientType {
+// Adjust this interface based on your exact database schema
+interface Summary {
     _id: string;
-    name?: string;
-    companyName?: string;
-}
-
-interface SummaryRecord {
-    _id: string;
-    summaryNumber?: string;
-    client?: ClientType | string;
+    summaryNumber: string;
     date: string;
-    bills?: unknown[]; 
-    netPayable?: number;
-    status?: string;
+    client: { _id: string; name: string } | string; // Handles both populated and unpopulated clients
+    category?: string;
+    status: string;
+    amount: number;
 }
 
 export default function AllSummariesPage() {
     const router = useRouter();
-    const [summaries, setSummaries] = useState<SummaryRecord[]>([]);
-    const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [searchTerm, setSearchTerm] = useState<string>("");
-
-    useEffect(() => {
-        fetchSummaries();
-    }, []);
+    const [summaries, setSummaries] = useState<Summary[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
     const fetchSummaries = async () => {
+        setIsLoading(true);
         try {
-            setIsLoading(true);
-            const res = await fetch(`/api/summaries?t=${Date.now()}`);
-            if (!res.ok) throw new Error("Failed to fetch summaries");
-            
-            const data: unknown = await res.json();
-            let rawSummaries: SummaryRecord[] = [];
-            
-            if (Array.isArray(data)) {
-                rawSummaries = data as SummaryRecord[];
-            } else if (data && typeof data === "object") {
-                const dataRecord = data as Record<string, unknown>;
-                
-                if (Array.isArray(dataRecord.data)) {
-                    rawSummaries = dataRecord.data as SummaryRecord[];
-                } else if (Array.isArray(dataRecord.docs)) {
-                    rawSummaries = dataRecord.docs as SummaryRecord[];
-                } else if (Array.isArray(dataRecord.summaries)) {
-                    rawSummaries = dataRecord.summaries as SummaryRecord[];
-                }
-            }
-
-            const validSummaries = rawSummaries.filter((s: SummaryRecord) => {
-                if (!s) return false;
-                const hasSummaryNumber = typeof s.summaryNumber === "string";
-                const hasNetPayable = typeof s.netPayable === "number";
-                const hasBills = Array.isArray(s.bills);
-                
-                return hasSummaryNumber || hasNetPayable || hasBills;
-            });
-            
-            const sorted = validSummaries.sort((a: SummaryRecord, b: SummaryRecord) => 
-                new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
-            );
-            
-            setSummaries(sorted);
-        } catch (error: unknown) {
-            console.error("Error fetching summaries:", error);
+            // Adjust this endpoint if you use /api/bills instead
+            const res = await fetch(`/api/summaries`); 
+            const data = await res.json();
+            setSummaries(Array.isArray(data) ? data : data.data || []);
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("Are you sure you want to delete this summary? This action cannot be undone.")) return;
-        
+    useEffect(() => { fetchSummaries(); }, []);
+
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm("Are you sure you want to delete this record? This cannot be undone.")) return;
+        setIsDeleting(id);
         try {
-            const res = await fetch(`/api/summaries/${id}`, { method: "DELETE" });
-            if (res.ok) {
-                setSummaries((prev: SummaryRecord[]) => prev.filter((s: SummaryRecord) => s._id !== id));
-            } else {
-                alert("Failed to delete summary. Please check the backend connection.");
-            }
-        } catch (error: unknown) {
-            console.error("Failed to delete summary", error);
+            const res = await fetch(`/api/summaries/${id}`, { method: "DELETE" }); // Adjust endpoint if needed
+            if (res.ok) setSummaries((prev) => prev.filter((s) => s._id !== id));
+        } finally {
+            setIsDeleting(null);
         }
     };
 
-    const getClientName = (clientData: ClientType | string | undefined | null): string => {
-        if (!clientData) return "Unknown Client";
-        if (typeof clientData === "string") return "Client ID: " + clientData.substring(0, 6);
-        return clientData.companyName || clientData.name || "Unknown Client";
+    // Helper to format money safely
+    const formatMoney = (amount: number) => {
+        return new Intl.NumberFormat("en-PK", {
+            style: "currency",
+            currency: "PKR",
+            minimumFractionDigits: 2,
+        }).format(amount || 0).replace("PKR", "Rs");
     };
 
-    const filteredSummaries = summaries.filter((s: SummaryRecord) => {
-        const term = searchTerm.toLowerCase();
-        const clientName = getClientName(s.client).toLowerCase();
-        const sumNum = (s.summaryNumber || "").toLowerCase();
-        return clientName.includes(term) || sumNum.includes(term);
-    });
-
-    const formatAmt = (num: number | undefined | null): string => {
-        return Number(num || 0).toLocaleString("en-PK", { maximumFractionDigits: 0 });
+    // Helper to get client name whether populated or not
+    const getClientName = (client: { _id: string; name: string } | string | null | undefined) => {
+        if (!client) return "Unknown Client";
+        if (typeof client === "string") return client;
+        return client.name || "Unknown Client";
     };
+
+    // ── DEFINE HOW THE COLUMNS SHOULD RENDER ──
+    const summaryColumns: ColumnDef<Summary>[] = [
+        { 
+            header: "No.", 
+            className: "font-black text-stone-900 pl-6 w-32", 
+            cell: (s) => s.summaryNumber 
+        },
+        { 
+            header: "Date", 
+            className: "text-stone-500 font-medium text-xs w-32", 
+            cell: (s) => s.date ? new Date(s.date).toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" }) : "—" 
+        },
+        { 
+            header: "Client", 
+            className: "font-bold text-stone-700", 
+            cell: (s) => getClientName(s.client)
+        },
+        { 
+            header: "Category", 
+            className: "text-stone-500 font-medium text-xs", 
+            cell: (s) => s.category || <span className="text-stone-300 italic">General</span>
+        },
+        { 
+            header: "Status", 
+            className: "w-32", 
+            cell: (s) => {
+                // Sleek dynamic badge based on status
+                const isPaid = s.status?.toUpperCase() === "PAID";
+                return (
+                    <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${
+                        isPaid ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-amber-50 text-amber-600 border border-amber-100"
+                    }`}>
+                        <Clock className="w-3 h-3 mr-1" />
+                        {s.status || "UNBILLED"}
+                    </span>
+                )
+            }
+        },
+        { 
+            header: "Amount", 
+            className: "text-right font-black text-stone-900 w-32", 
+            cell: (s) => formatMoney(s.amount)
+        },
+        {
+            header: "Actions",
+            className: "text-right pr-6 w-24",
+            cell: (s) => (
+                <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-stone-400 hover:text-primary hover:bg-primary/10" 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/dashboard/bills/${s._id}`); // Teleport to the Edit Loader!
+                        }}
+                    >
+                        <ExternalLink className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-stone-400 hover:text-red-600 hover:bg-red-50" 
+                        onClick={(e) => handleDelete(s._id, e)}
+                    >
+                        {isDeleting === s._id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </Button>
+                </div>
+            )
+        }
+    ];
 
     return (
-        <div className="p-8 max-w-7xl mx-auto space-y-8">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="p-6 md:p-10 max-w-7xl mx-auto pb-32 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">All Summaries</h1>
-                    <p className="text-sm font-medium text-slate-500 mt-1">Manage and review your master billing ledgers.</p>
+                    <h1 className="text-3xl font-black text-stone-900 tracking-tight">All Summaries</h1>
+                    <p className="mt-1 font-medium text-stone-500">Manage, filter, and review your invoice directory.</p>
                 </div>
                 <Button 
-                    onClick={() => router.push("/dashboard/summary/new")} 
-                    className="bg-[#ea580c] text-white hover:bg-[#d44d0a] font-bold shadow-sm h-11 px-6 rounded-xl transition-colors"
+                    onClick={() => router.push("/dashboard/bills/new?fresh=true")}
+                    className="bg-primary hover:bg-primary/90 text-white font-bold h-11 px-6 rounded-xl shadow-md transition-all active:scale-95"
                 >
-                    <Plus className="w-4 h-4 mr-2" /> Create Summary
+                    <Plus className="mr-2 h-4 w-4" /> Create New
                 </Button>
             </div>
 
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-                <Search className="w-5 h-5 text-slate-400 ml-2" />
-                <input 
-                    type="text" 
-                    placeholder="Search by Summary No. or Client Name..." 
-                    value={searchTerm}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                    className="flex-1 h-10 outline-none font-medium text-slate-700 bg-transparent"
-                />
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                {isLoading ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                        <Loader2 className="w-8 h-8 animate-spin text-[#ea580c] mb-4" />
-                        <p className="font-bold text-sm tracking-widest uppercase">Loading Summaries...</p>
-                    </div>
-                ) : filteredSummaries.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                        <FileText className="w-12 h-12 text-slate-200 mb-4" />
-                        <p className="font-bold text-lg text-slate-600">No summaries found.</p>
-                        <p className="text-sm mt-1">Try adjusting your search or check your backend API.</p>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-slate-50 border-b border-slate-200">
-                                    <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest">Summary No.</th>
-                                    <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest">Date</th>
-                                    <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest">Client</th>
-                                    <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Bills</th>
-                                    <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest text-right">Net Payable</th>
-                                    <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Status</th>
-                                    <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-widest text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {filteredSummaries.map((summary: SummaryRecord) => (
-                                    <tr key={summary._id} className="hover:bg-slate-50/50 transition-colors">
-                                        <td className="py-4 px-6 font-bold text-slate-900">
-                                            {summary.summaryNumber || `SUM-${summary._id.substring(0, 5).toUpperCase()}`}
-                                        </td>
-                                        <td className="py-4 px-6 font-medium text-slate-600">
-                                            {summary.date ? new Date(summary.date).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "-"}
-                                        </td>
-                                        <td className="py-4 px-6 font-bold text-slate-800">
-                                            {getClientName(summary.client)}
-                                        </td>
-                                        <td className="py-4 px-6 text-center font-bold text-slate-600">
-                                            <span className="bg-slate-100 text-slate-600 py-1 px-3 rounded-full text-xs">
-                                                {summary.bills?.length || 0}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-6 font-black text-[#ea580c] text-right">
-                                            Rs {formatAmt(summary.netPayable)}
-                                        </td>
-                                        <td className="py-4 px-6 text-center">
-                                            <span className="bg-green-100 text-green-700 font-bold text-[10px] uppercase tracking-widest py-1.5 px-3 rounded-md">
-                                                {summary.status || "Finalized"}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-6 text-right space-x-2 whitespace-nowrap">
-                                            {/* EDIT BUTTON */}
-                                            <Button 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                onClick={() => router.push(`/dashboard/summary/${summary._id}/edit`)}
-                                                className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                                title="Edit"
-                                            >
-                                                <Edit className="w-4 h-4" />
-                                            </Button>
-
-                                            {/* PRINT/VIEW BUTTON */}
-                                            <Button 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                onClick={() => router.push(`/dashboard/summary/${summary._id}`)}
-                                                className="text-slate-400 hover:text-[#ea580c] hover:bg-orange-50 transition-colors"
-                                                title="View / Print"
-                                            >
-                                                <Printer className="w-4 h-4" />
-                                            </Button>
-
-                                            {/* DELETE BUTTON */}
-                                            <Button 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                onClick={() => handleDelete(summary._id)}
-                                                className="text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                title="Delete"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
+            <DataTable 
+                data={summaries}
+                columns={summaryColumns}
+                isLoading={isLoading}
+                searchPlaceholder="Search invoices, clients, or categories..."
+                emptyIcon={<FileText className="h-10 w-10 mx-auto" />}
+                emptyMessage="No summaries found."
+                // Define how searching works here
+                filterFn={(summary, term) => 
+                    (summary.summaryNumber || "").toLowerCase().includes(term) || 
+                    getClientName(summary.client).toLowerCase().includes(term) ||
+                    (summary.category || "").toLowerCase().includes(term)
+                }
+                // Custom sort options for financial data
+                sortOptions={[
+                    { label: "Newest First", value: "NEWEST" },
+                    { label: "Oldest First", value: "OLDEST" },
+                    { label: "Amount: High to Low", value: "AMOUNT_DESC" },
+                    { label: "Amount: Low to High", value: "AMOUNT_ASC" }
+                ]}
+                defaultSort="NEWEST"
+                // Define how sorting works here
+                sortFn={(a, b, sortOrder) => {
+                    if (sortOrder === "NEWEST") return new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime();
+                    if (sortOrder === "OLDEST") return new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime();
+                    if (sortOrder === "AMOUNT_DESC") return (b.amount || 0) - (a.amount || 0);
+                    if (sortOrder === "AMOUNT_ASC") return (a.amount || 0) - (b.amount || 0);
+                    return 0;
+                }}
+            />
         </div>
     );
 }

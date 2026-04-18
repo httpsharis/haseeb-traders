@@ -22,53 +22,53 @@ Haseeb Traders is a comprehensive billing and invoicing solution built with Next
 
 ### Key Highlights
 
-- **🔐 Secure Authentication** - Google OAuth integration via NextAuth.js
-- **📊 Dashboard Analytics** - Real-time statistics and quick actions
-- **📝 Invoice Management** - Master-detail invoice structure with line items
-- **💰 Tax Calculation** - Multiple tax types with automatic calculations
-- **👥 Client Management** - Search, pagination, and client tracking
-- **🎨 Modern UI** - Built with shadcn/ui and Tailwind CSS v4
-- **📱 Responsive Design** - Mobile-first approach with collapsible navigation
-- **⚡ Type-Safe** - End-to-end TypeScript implementation
-- **🚀 Fast & Scalable** - Service layer architecture with MongoDB
+- **Secure Authentication** - Google OAuth integration via NextAuth.js
+- **Dashboard Analytics** - Real-time statistics and quick actions
+- **Invoice Management** - Master-detail invoice structure with line items
+- **Tax Calculation** - Multiple tax types with automatic calculations
+- **Client Management** - Search, pagination, and client tracking
+- **Modern UI** - Built with shadcn/ui and Tailwind CSS v4
+- **Responsive Design** - Mobile-first approach with collapsible navigation
+- **Type-Safe** - End-to-end TypeScript implementation
+- **Fast & Scalable** - Service layer architecture with MongoDB
 
 ---
 
 ## Features
 
-### 🔑 Authentication & Security
+### Authentication & Security
 - Google OAuth 2.0 integration
 - Server-side session management
 - Protected routes with automatic redirects
 - Secure environment variable handling
 
-### 📋 Invoice Management
+### Invoice Management
 - **Summaries** - Master invoice records with client linking
 - **Bills** - Multiple line items per summary
 - **Auto-numbering** - Automatic generation of invoice and bill numbers
 - **Cascade Operations** - Delete summaries with all associated bills
 - **Draft System** - Save invoices as drafts before finalizing
 
-### 💵 Financial Tracking
+### Financial Tracking
 - Multiple tax types per line item
 - Automatic tax amount calculations
 - Discount and commission tracking
 - Category-based product organization
 - Decimal precision for financial accuracy
 
-### 👤 Client Management
+### Client Management
 - Client database with CRUD operations
 - Search functionality with real-time filtering
 - Pagination for large datasets
 - Client-invoice relationship tracking
 
-### ⚙️ Configuration
+### Configuration
 - Custom tax type definitions
 - Product category management
 - Active/inactive status toggles
 - Extensible configuration system
 
-### 📊 Dashboard
+### Dashboard
 - Real-time statistics (total bills, summaries)
 - Quick action buttons for common tasks
 - Recent activity views with tabs
@@ -558,7 +558,7 @@ Built with:
 
 <div align="center">
 
-**Made with ❤️ for efficient billing management**
+**Made with love for efficient billing management**
 
 [⬆ Back to Top](#haseeb-traders)
 
