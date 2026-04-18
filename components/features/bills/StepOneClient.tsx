@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarIcon, Clock, Hash, Search, CheckCircle2, Plus, Building2, ArrowRight, Trash2 } from "lucide-react";
+import { CalendarIcon, Clock, Hash, Search, CheckCircle2, Plus, Building2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useBillDraft } from "@/hooks/useBillDraft";
@@ -16,35 +16,41 @@ export default function Step1Client() {
     const searchParams = useSearchParams();
     const { data, updateData, resetDraft } = useBillDraft();
 
-    // Reset draft when arriving fresh
-    useEffect(() => {
-        if (searchParams.get("fresh") === "true") {
-            resetDraft();
-            // Clear local form state perfectly
-            setClientId("");
-            setClientName("");
-            setSummaryNumber("");
-            setDate(new Date().toISOString().split("T")[0]);
-            setTaxPeriod("");
-            
-            // Clean up the URL so back button doesn't trigger a reset
-            router.replace("/dashboard/bills/new", { scroll: false });
-        }
-    }, [searchParams, resetDraft, router]);
-
+    // ✅ 1. ALL STATE DECLARATIONS AT THE VERY TOP
     const [clientId, setClientId] = useState(data.clientId || "");
     const [clientName, setClientName] = useState(data.clientName || "");
     const [summaryNumber, setSummaryNumber] = useState(data.summaryNumber || "");
     const [date, setDate] = useState(data.date || new Date().toISOString().split("T")[0]);
     const [taxPeriod, setTaxPeriod] = useState(data.taxPeriod || "");
 
-    // ✅ ADDED: This effect forces the inputs to clear out instantly if the draft gets wiped!
+    // ✅ 2. USE EFFECTS BELOW STATE
+    // Reset draft when arriving fresh (e.g. clicking "Create Bill" from sidebar)
     useEffect(() => {
-        setClientId(data.clientId || "");
-        setClientName(data.clientName || "");
-        setSummaryNumber(data.summaryNumber || "");
-        setDate(data.date || "");
-        setTaxPeriod(data.taxPeriod || "");
+        if (searchParams.get("fresh") === "true") {
+            setTimeout(() => {
+                resetDraft();
+                // Clear local form state perfectly
+                setClientId("");
+                setClientName("");
+                setSummaryNumber("");
+                setDate(new Date().toISOString().split("T")[0]);
+                setTaxPeriod("");
+                
+                // Clean up the URL so back button doesn't trigger a reset
+                router.replace("/dashboard/bills/new", { scroll: false });
+            }, 0);
+        }
+    }, [searchParams, resetDraft, router]);
+
+    // Sync inputs if draft gets wiped or injected from Edit Mode
+    useEffect(() => {
+        setTimeout(() => {
+            setClientId(data.clientId || "");
+            setClientName(data.clientName || "");
+            setSummaryNumber(data.summaryNumber || "");
+            setDate(data.date || new Date().toISOString().split("T")[0]);
+            setTaxPeriod(data.taxPeriod || "");
+        }, 0);
     }, [data]);
 
     const handleClientSelect = (id: string, name: string) => {
@@ -56,7 +62,6 @@ export default function Step1Client() {
         updateData({ clientId, clientName, summaryNumber, date, taxPeriod });
         router.push("/dashboard/bills/new/items");
     };
-
 
     return (
         <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -95,6 +100,9 @@ export default function Step1Client() {
                         setDate={setDate}
                         taxPeriod={taxPeriod}
                         setTaxPeriod={setTaxPeriod}
+                        // ✅ Edit Shield Enabled!
+                        isEditing={data.items && data.items.length > 0}
+                        originalNumber={data.summaryNumber}
                     />
                 </div>
 
@@ -137,7 +145,6 @@ function ClientSelector({ selectedName, onSelect }: ClientSelectorProps) {
     const [showNewClient, setShowNewClient] = useState(false);
     const [activeIndex, setActiveIndex] = useState(-1);
 
-    // Initial Data Fetch
     useEffect(() => {
         fetch("/api/clients?limit=100")
             .then((res) => res.json())
@@ -148,9 +155,8 @@ function ClientSelector({ selectedName, onSelect }: ClientSelectorProps) {
             .catch(() => setLoading(false));
     }, []);
 
-    // ✅ ADDED: Sync Search Query if the user clicks "Start Fresh"
     useEffect(() => {
-        setSearchQuery(selectedName || "");
+        setTimeout(() => setSearchQuery(selectedName || ""), 0);
     }, [selectedName]);
 
     const filtered = clients.filter((c) =>
@@ -186,10 +192,8 @@ function ClientSelector({ selectedName, onSelect }: ClientSelectorProps) {
     };
 
     const handleBlur = () => {
-        // Delay hiding dropdown so clicks register
         setTimeout(() => setShowDropdown(false), 200);
         
-        // Auto-select if there's exactly 1 perfect match and they didn't explicitly click
         if (searchQuery && selectedName === "") {
             const perfectMatch = clients.find(c => c.name.toLowerCase() === searchQuery.toLowerCase());
             if (perfectMatch) {
@@ -222,7 +226,6 @@ function ClientSelector({ selectedName, onSelect }: ClientSelectorProps) {
                             setSearchQuery(e.target.value);
                             setActiveIndex(-1);
                             setShowDropdown(true);
-                            // Only clear the selection if they start modifying a selected name
                             if (selectedName && e.target.value !== selectedName) {
                                 onSelect("", "");
                             }
@@ -246,7 +249,6 @@ function ClientSelector({ selectedName, onSelect }: ClientSelectorProps) {
                 </Button>
             </div>
 
-            {/* Smart Dropdown Menu */}
             {showDropdown && (
                 <div className="absolute z-20 w-full mt-1 bg-white border border-stone-100 rounded-lg shadow-xl max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200 py-1">
                     {loading ? (
@@ -263,7 +265,7 @@ function ClientSelector({ selectedName, onSelect }: ClientSelectorProps) {
                                     setShowNewClient(true);
                                 }}
                             >
-                                <Plus className="h-4 w-4 mr-2" /> Add "{searchQuery}"
+                                <Plus className="h-4 w-4 mr-2" /> Add &quot{searchQuery}&quot
                             </Button>
                         </div>
                     ) : (
@@ -272,7 +274,6 @@ function ClientSelector({ selectedName, onSelect }: ClientSelectorProps) {
                                 key={client._id}
                                 type="button"
                                 onMouseDown={(e) => {
-                                    // Prevent default so the input doesn't lose focus prematurely while clicking
                                     e.preventDefault(); 
                                     onSelect(client._id, client.name);
                                     setSearchQuery(client.name);
@@ -291,7 +292,6 @@ function ClientSelector({ selectedName, onSelect }: ClientSelectorProps) {
 
             {showDropdown && <div className="fixed inset-0 z-10" onClick={() => setShowDropdown(false)} />}
 
-            {/* Inline creation modal */}
             {showNewClient && (
                 <AddClientPopup
                     initialName={filtered.length === 0 ? searchQuery : ""}
@@ -374,7 +374,7 @@ function AddClientPopup({ initialName = "", onClose, onSuccess }: AddClientPopup
                         <Button
                             onClick={handleCreateClient}
                             disabled={saving || !newClientName.trim()}
-                            className="h-10 px-6 font-bold shadow-none rounded-lg disabled:opacity-50"
+                            className="h-10 px-6 font-bold shadow-none rounded-lg disabled:opacity-50 bg-primary text-white hover:bg-primary/90"
                         >
                             {saving ? "Saving..." : "Save Client"}
                         </Button>
@@ -397,10 +397,12 @@ interface BillDetailsProps {
     setDate: (val: string) => void;
     taxPeriod: string;
     setTaxPeriod: (val: string) => void;
+    isEditing: boolean;
+    originalNumber: string;
 }
 
 function BillDetailsForm({
-    clientName, summaryNumber, setSummaryNumber, date, setDate, taxPeriod, setTaxPeriod
+    clientName, summaryNumber, setSummaryNumber, date, setDate, taxPeriod, setTaxPeriod, isEditing, originalNumber
 }: BillDetailsProps) {
     const [baseSequence, setBaseSequence] = useState<number | null>(null);
 
@@ -434,7 +436,13 @@ function BillDetailsForm({
         }
     }, [baseSequence]);
 
+    // ✅ THE SHIELD: Protects injected edit data from being overwritten
     useEffect(() => {
+        if (isEditing && originalNumber) {
+            setSummaryNumber(originalNumber);
+            return;
+        }
+
         if (baseSequence !== null && clientName && taxPeriod) {
             const initials = clientName.split(" ").map(w => w[0]).join("").substring(0, 3).toUpperCase();
             const [month, year] = taxPeriod.split(" ");
@@ -445,11 +453,10 @@ function BillDetailsForm({
         } else if (baseSequence !== null) {
             setSummaryNumber(String(baseSequence).padStart(3, "0"));
         }
-    }, [clientName, taxPeriod, baseSequence, setSummaryNumber]);
+    }, [clientName, taxPeriod, baseSequence, setSummaryNumber, isEditing, originalNumber]);
 
     return (
         <div className="space-y-6">
-
             {/* Bill Number */}
             <div className="space-y-2">
                 <label className="text-[11px] font-bold text-stone-500 uppercase tracking-widest">Bill Number</label>
@@ -501,7 +508,6 @@ function BillDetailsForm({
                     </div>
                 </div>
             </div>
-
         </div>
     );
 }

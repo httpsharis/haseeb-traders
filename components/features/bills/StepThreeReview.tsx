@@ -246,19 +246,21 @@ function ReviewSidebar({ docType, setDocType, printFormat, setPrintFormat }: Sid
                 billNumber: data.summaryNumber || `INV-${Date.now().toString().slice(-6)}`,
                 date: data.date || new Date().toISOString(),
                 description: data.items.length === 1 ? data.items[0].description : "Combined Invoice",
-                category: "General",
+                category: data.items.length > 0 ? data.items[0].category : "General", 
                 quantity: 1,
                 unitPrice: masterBaseAmount,
                 baseAmount: masterBaseAmount,
                 taxAmount: masterTaxAmount,
                 amount: masterBaseAmount + masterTaxAmount,
                 items: formattedItems,
-                documentType: docType, // Saving whether it was an invoice or bill!
+                documentType: docType,
             };
 
-            // Make the real API call
-            const response = await fetch("/api/bills", {
-                method: "POST",
+            const url = data._id ? `/api/bills/${data._id}` : "/api/bills";
+            const method = data._id ? "PUT" : "POST";
+
+            const response = await fetch(url, {
+                method: method, // Uses the dynamic method
                 headers: {
                     "Content-Type": "application/json"
                 },

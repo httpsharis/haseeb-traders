@@ -25,6 +25,7 @@ export interface LineItem {
 }
 
 export interface BillDraftData {
+  _id?: string;
   clientId: string;
   clientName: string;
   summaryNumber: string;
@@ -47,6 +48,7 @@ interface BillDraftContextType {
 }
 
 const defaultData: BillDraftData = {
+  _id: undefined,
   clientId: "",
   clientName: "",
   summaryNumber: "",
