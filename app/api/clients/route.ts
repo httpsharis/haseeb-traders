@@ -2,6 +2,18 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/config/db";
 import { getClientsService, createClientService } from "@/services/clientService";
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function getErrorStatus(error: unknown) {
+  const message = getErrorMessage(error).toLowerCase();
+  if (message.includes("database dns lookup failed") || message.includes("querysrv") || message.includes("econnrefused")) {
+    return 503;
+  }
+  return 500;
+}
+
 // ── GET /api/clients ────────────────────────────────────
 // Returns paginated clients with optional name search.
 //
@@ -25,8 +37,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    const message = getErrorMessage(error);
+    return NextResponse.json({ error: message }, { status: getErrorStatus(error) });
   }
 }
 
@@ -39,7 +51,10 @@ export async function POST(req: Request) {
     const newClient = await createClientService(body);
     return NextResponse.json(newClient, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: 400 });
+    const message = getErrorMessage(error);
+    if (message.toLowerCase().includes("already exists")) {
+      return NextResponse.json({ error: message }, { status: 409 });
+    }
+    return NextResponse.json({ error: message }, { status: getErrorStatus(error) });
   }
 }

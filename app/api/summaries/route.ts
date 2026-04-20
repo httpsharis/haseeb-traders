@@ -4,6 +4,18 @@ import SummaryModel from "@/models/summaryModel";
 import BillModel from "@/models/billModel";
 import "@/models/clientModel";
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function getErrorStatus(error: unknown) {
+  const message = getErrorMessage(error).toLowerCase();
+  if (message.includes("database dns lookup failed") || message.includes("querysrv") || message.includes("econnrefused")) {
+    return 503;
+  }
+  return 500;
+}
+
 // ── GET /api/summaries ──────────────────────────────────
 // Fetches all summaries for the main list screen
 export async function GET() {
@@ -17,10 +29,10 @@ export async function GET() {
     return NextResponse.json(summaries, { status: 200 });
   } catch (error) {
     console.error("Summary GET Error:", error);
-    const message = error instanceof Error ? error.message : "Failed to fetch summaries";
+    const message = getErrorMessage(error) || "Failed to fetch summaries";
     return NextResponse.json(
       { error: message },
-      { status: 500 }
+      { status: getErrorStatus(error) }
     );
   }
 }
@@ -53,7 +65,7 @@ export async function POST(req: Request) {
     } catch (error) {
         console.error("Summary POST Error:", error);
         // THE FIX: Send the actual Mongoose validation error to the frontend!
-        const message = error instanceof Error ? error.message : "Failed to save summary";
-        return NextResponse.json({ error: message }, { status: 500 });
+      const message = getErrorMessage(error) || "Failed to save summary";
+      return NextResponse.json({ error: message }, { status: getErrorStatus(error) });
     }
 }
