@@ -1,62 +1,71 @@
 import billModel from "@/models/billModel";
-import { Bill, LineItem } from "@/types"; 
+import { Bill, LineItem } from "@/types";
+import { Decimal } from "decimal.js";
 
 // ── THE MATH ENGINE ─────────────────────────────────────
 // Automatically calculates all base amounts and taxes for line items
+// ── THE MATH ENGINE ─────────────────────────────────────
 function calculateBillTotals(items: LineItem[] = []) {
-    let masterBaseAmount = 0;
-    let masterTaxAmount = 0;
+  // Start totals as Decimal objects, not standard numbers
+  let masterBaseAmount = new Decimal(0);
+  let masterTaxAmount = new Decimal(0);
 
-    const processedItems = items.map(item => {
-        // 1. Calculate Item Base (Qty * Price)
-        const itemBase = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
-        masterBaseAmount += itemBase;
+  const processedItems = items.map(item => {
+    // 1. Calculate Item Base (Qty * Price) safely
+    const qty = new Decimal(item.quantity || 0);
+    const price = new Decimal(item.unitPrice || 0);
+    const itemBase = qty.mul(price);
 
-        // 2. Process Item Taxes
-        let itemTaxTotal = 0;
-        const processedTaxes = (item.taxes || []).map(tax => {
-            const taxAmt = itemBase * ((Number(tax.percentage) || 0) / 100);
-            itemTaxTotal += taxAmt;
-            return {
-                ...tax,
-                baseAmount: itemBase,
-                amount: taxAmt
-            };
-        });
+    masterBaseAmount = masterBaseAmount.add(itemBase);
 
-        masterTaxAmount += itemTaxTotal;
+    // 2. Process Item Taxes safely
+    let itemTaxTotal = new Decimal(0);
+    const processedTaxes = (item.taxes || []).map(tax => {
+      const percentage = new Decimal(tax.percentage || 0);
+      const taxAmt = itemBase.mul(percentage.div(100));
 
-        // 3. Return the fully calculated line item
-        return {
-            ...item,
-            amount: itemBase,
-            taxes: processedTaxes
-        };
+      itemTaxTotal = itemTaxTotal.add(taxAmt);
+
+      return {
+        ...tax,
+        baseAmount: itemBase.toNumber(),
+        amount: taxAmt.toNumber()
+      };
     });
 
-    // 4. Return the master totals for the Bill
+    masterTaxAmount = masterTaxAmount.add(itemTaxTotal);
+
+    // 3. Convert back to standard numbers for the database
     return {
-        processedItems,
-        baseAmount: masterBaseAmount,
-        taxAmount: masterTaxAmount,
-        amount: masterBaseAmount + masterTaxAmount // Net Total
+      ...item,
+      amount: itemBase.toNumber(),
+      taxes: processedTaxes
     };
+  });
+
+  // 4. Return the final, perfect master totals
+  return {
+    processedItems,
+    baseAmount: masterBaseAmount.toNumber(),
+    taxAmount: masterTaxAmount.toNumber(),
+    amount: masterBaseAmount.add(masterTaxAmount).toNumber()
+  };
 }
 
 // ── Create a new bill ───────────────────────────────────
 export async function createBillService(data: Partial<Bill>) {
-    // Run the math engine before saving to the database
-    const totals = calculateBillTotals(data.items || []);
-    
-    const payload = {
-        ...data,
-        items: totals.processedItems,
-        baseAmount: totals.baseAmount,
-        taxAmount: totals.taxAmount,
-        amount: totals.amount
-    };
+  // Run the math engine before saving to the database
+  const totals = calculateBillTotals(data.items || []);
 
-    return await billModel.create(payload);
+  const payload = {
+    ...data,
+    items: totals.processedItems,
+    baseAmount: totals.baseAmount,
+    taxAmount: totals.taxAmount,
+    amount: totals.amount
+  };
+
+  return await billModel.create(payload);
 }
 
 // ── Get all bills for a specific summary ────────────────
@@ -74,14 +83,14 @@ export async function getSingleBillService(id: string) {
 export async function updateBillService(id: string, data: Partial<Bill>) {
   // Use const! We mutate the properties, but not the variable itself.
   const updatePayload = { ...data };
-  
+
   // If the update includes line items, we MUST recalculate the totals
   if (data.items) {
-      const totals = calculateBillTotals(data.items);
-      updatePayload.items = totals.processedItems;
-      updatePayload.baseAmount = totals.baseAmount;
-      updatePayload.taxAmount = totals.taxAmount;
-      updatePayload.amount = totals.amount;
+    const totals = calculateBillTotals(data.items);
+    updatePayload.items = totals.processedItems;
+    updatePayload.baseAmount = totals.baseAmount;
+    updatePayload.taxAmount = totals.taxAmount;
+    updatePayload.amount = totals.amount;
   }
 
   return await billModel.findByIdAndUpdate(id, updatePayload, {
