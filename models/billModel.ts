@@ -24,7 +24,7 @@ const billSchema = new Schema({
   client: { 
     type: Schema.Types.ObjectId, 
     ref: "Client", 
-    required: true 
+    required: function(this: any) { return this.status !== "Draft"; }
   },
   summary: { 
     type: Schema.Types.ObjectId, 
@@ -33,8 +33,8 @@ const billSchema = new Schema({
   },
   status: { 
     type: String, 
-    enum: ["Unbilled", "Summarized"], 
-    default: "Unbilled" 
+    enum: ["Draft", "Unbilled", "Summarized"], 
+    default: "Draft" 
   },
   billNumber: { type: String },
   date: { type: Date },
@@ -42,9 +42,9 @@ const billSchema = new Schema({
   // Master Totals & Info
   description: { type: String, default: "Combined Invoice" },
   category: { type: String, default: "Multiple Items" },
-  baseAmount: { type: Number, required: true },
-  taxAmount: { type: Number, required: true },
-  amount: { type: Number, required: true },
+  baseAmount: { type: Number, default: 0 },
+  taxAmount: { type: Number, default: 0 },
+  amount: { type: Number, default: 0 },
   
   // The array that actually holds the rows
   items: [lineItemSchema],

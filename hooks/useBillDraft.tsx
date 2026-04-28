@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -35,6 +36,7 @@ export interface BillDraftData {
   summaryTaxes: TaxCharge[];
   discount: number;
   commission: number;
+  status?: string;
 }
 
 interface BillDraftContextType {
@@ -66,39 +68,95 @@ const defaultData: BillDraftData = {
 const BillDraftContext = createContext<BillDraftContextType | undefined>(undefined);
 
 export function BillDraftProvider({ children }: { children: ReactNode }) {
+  const searchParams = useSearchParams();
+  const draftId = searchParams?.get("draftId");
+  
   const [data, setData] = useState<BillDraftData>(defaultData);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // CACHE LOAD: Async fix to prevent cascading renders!
+  // 1. DATABASE LOAD: Hydrate from API
   useEffect(() => {
     const loadDraft = async () => {
-      const savedDraft = localStorage.getItem("haseeb_bill_draft");
-      if (savedDraft) {
+      // Prioritize loading the draft from the DB if draftId is present
+      if (draftId) {
         try {
-          setData(JSON.parse(savedDraft));
+          const res = await fetch(`/api/bills/${draftId}`);
+          if (res.ok) {
+            const dbDraft = await res.json();
+            // Handle populated client vs raw clientId
+            const clientId = dbDraft.client?._id || dbDraft.client || "";
+            const clientName = dbDraft.client?.name || "";
+            
+            setData({
+              ...defaultData,
+              ...dbDraft,
+              clientId,
+              clientName,
+            });
+            setIsLoaded(true);
+            return;
+          }
         } catch (err) {
-          console.error("Failed to load draft from cache", err);
+          console.error("Failed to load draft from database", err);
         }
+      }
+      
+      // Fallback checkout local storage if no draftId
+      if (!draftId) {
+          const savedDraft = localStorage.getItem("haseeb_bill_draft");
+          if (savedDraft) {
+            try {
+              setData(JSON.parse(savedDraft));
+            } catch (err) {
+              console.error("Failed to load draft from cache", err);
+            }
+          }
       }
       setIsLoaded(true);
     };
 
     loadDraft();
-  }, []);
+  }, [draftId]);
 
-  // CACHE SAVE: Run every time 'data' changes
+  // 2. DATABASE AUTO-SAVE ENGINE 
   useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem("haseeb_bill_draft", JSON.stringify(data));
+    // Only auto-save if we are loaded, and we have an actionable state
+    if (!isLoaded || (data.status !== "Draft" && !data._id && !draftId)) {
+        // We preserve local storage for pure clientside sessions just in case
+        if (isLoaded) localStorage.setItem("haseeb_bill_draft", JSON.stringify(data));
+        return;
     }
-  }, [data, isLoaded]);
 
-  // 1. Master Update Function
+    const saveDraftTimer = setTimeout(async () => {
+      try {
+        const payload: any = { ...data };
+        
+        // Mongo map fields appropriately
+        if (payload.clientId) {
+            payload.client = payload.clientId;
+        } else {
+             delete payload.client; // Strip client if empty to prevent MongoDB cast errors
+        }
+
+        await fetch(`/api/bills`, {
+          method: "POST", // The route handles upsert automatically
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } catch (err) {
+        console.error("Auto-save failed", err);
+      }
+    }, 1200); // 1.2 second debounce
+    
+    return () => clearTimeout(saveDraftTimer);
+  }, [data, isLoaded, draftId]);
+
+  // 3. Master Update Function
   const updateData = (updates: Partial<BillDraftData>) => {
     setData((prev) => ({ ...prev, ...updates }));
   };
 
-  // 2. Line Item Management
+  // 4. Line Item Management
   const addItem = (item: LineItem) => {
     setData((prev) => ({ ...prev, items: [...prev.items, item] }));
   };
@@ -130,7 +188,7 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
     setData((prev) => ({ ...prev, items: prev.items.filter((item) => item.id !== id) }));
   };
 
-  // 3. Tax Mathematics
+  // 5. Tax Mathematics
   const applyTaxesToItems = (taxes: TaxCharge[]) => {
     setData((prev) => {
       const subtotal = prev.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
@@ -154,9 +212,9 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  // 4. Reset & Clear Cache
+  // 6. Reset & Clear Cache
   const resetDraft = () => {
-    setData(defaultData);
+    setData({ ...defaultData, _id: draftId || undefined });
     localStorage.removeItem("haseeb_bill_draft");
   };
 

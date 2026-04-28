@@ -39,8 +39,9 @@ export async function POST(req: Request) {
         await connectDB();
         const payload = await req.json();
 
-        payload.status = "Unbilled"; 
-        
+        if (!payload.status || payload.status !== "Draft") {
+            payload.status = "Unbilled"; 
+        }
         // THE UPSERT FIX: Check if the frontend sent an existing ID
         if (payload._id) {
             // Update the existing document

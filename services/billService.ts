@@ -1,7 +1,8 @@
 import billModel from "@/models/billModel";
 import { Bill, LineItem } from "@/types";
 import { Decimal } from "decimal.js";
-
+import SummaryModel from "@/models/summaryModel";
+import "@/models/clientModel";
 // ── THE MATH ENGINE ─────────────────────────────────────
 // Automatically calculates all base amounts and taxes for line items
 // ── THE MATH ENGINE ─────────────────────────────────────
@@ -107,4 +108,82 @@ export async function deleteBillService(id: string) {
 // ── Delete all bills for a summary (cascade) ────────────
 export async function deleteBillsBySummaryService(summaryId: string) {
   return await billModel.deleteMany({ summary: summaryId });
+}
+
+// ── Dashboard: Get Stats ────────────────────────────────
+export async function getDashboardStatsService() {
+  const [totalSummaries, billStats] = await Promise.all([
+    SummaryModel.countDocuments(),
+    billModel.aggregate([
+      {
+        $facet: {
+          totalCounts: [
+            { $count: "count" }
+          ],
+          pendingTotals: [
+            { $match: { status: { $ne: "Summarized" } } },
+            { $group: { _id: null, amount: { $sum: "$amount" } } }
+          ]
+        }
+      }
+    ])
+  ]);
+
+  const totalBills = billStats[0]?.totalCounts[0]?.count || 0;
+  const pendingAmount = billStats[0]?.pendingTotals[0]?.amount || 0;
+
+  return { totalSummaries, totalBills, pendingAmount };
+}
+
+// ── Dashboard: Get Recent Activity ──────────────────────
+export async function getRecentActivityService(limit: number = 20) {
+  const [recentSummaries, recentBills] = await Promise.all([
+    SummaryModel.aggregate([
+      { $sort: { createdAt: -1 } },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: "clients",
+          localField: "client",
+          foreignField: "_id",
+          as: "clientDetails"
+        }
+      },
+      { $unwind: { path: "$clientDetails", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "bills",
+          localField: "_id",
+          foreignField: "summary",
+          as: "bills"
+        }
+      },
+      {
+        $addFields: {
+          clientName: "$clientDetails.name",
+          totalAmount: {
+            $sum: {
+              $map: {
+                input: "$bills",
+                as: "b",
+                in: { $multiply: ["$$b.quantity", "$$b.unitPrice"] }
+              }
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          bills: 0,
+          clientDetails: 0
+        }
+      }
+    ]),
+    billModel.find().sort({ createdAt: -1 }).limit(limit).populate("client", "name companyName"),
+  ]);
+
+  return {
+    summaries: recentSummaries,
+    bills: recentBills
+  };
 }
