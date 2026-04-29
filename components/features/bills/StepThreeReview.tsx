@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Printer, Download, Loader2, AlertCircle, ArrowLeft, FileText, LayoutTemplate, ReceiptText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useBillDraft, LineItem, TaxCharge } from "@/hooks/useBillDraft";
+import { useBillDraft, LineItem } from "@/hooks/useBillDraft";
 
 // ============================================================================
 // SHARED UTILITIES
@@ -75,12 +75,9 @@ interface PrintLayoutProps {
 function PrintLayout({ docType, printFormat }: PrintLayoutProps) {
     const { data } = useBillDraft();
 
-    const baseAmount = data.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-    const gstAmount = data.items.reduce((sum, item) => {
-        const itemGst = item.taxes?.find(t => t.name === "GST");
-        return sum + (itemGst ? itemGst.amount : 0);
-    }, 0);
-    const grandTotal = baseAmount + gstAmount;
+    const baseAmount = data.baseAmount || 0;
+    const gstAmount = data.taxAmount || 0;
+    const grandTotal = data.amount || 0;
 
     // If Letterhead, add massive top padding for the physical printer and hide digital header
     const isLetterhead = printFormat === "LETTERHEAD";
@@ -216,44 +213,15 @@ function ReviewSidebar({ docType, setDocType, printFormat, setPrintFormat }: Sid
         setError("");
 
         try {
-            let masterBaseAmount = 0;
-            let masterTaxAmount = 0;
-
-            const formattedItems = data.items.map((item: LineItem) => {
-                const q = Number(item.quantity) || 1;
-                const p = Number(item.unitPrice) || 0;
-                const itemBase = q * p;
-
-                const itemTax = Array.isArray(item.taxes)
-                    ? item.taxes.reduce((sum: number, t: TaxCharge) => sum + (Number(t.amount) || 0), 0)
-                    : 0;
-
-                masterBaseAmount += itemBase;
-                masterTaxAmount += itemTax;
-
-                return {
-                    description: item.description || "Item",
-                    category: item.category || "General",
-                    quantity: q,
-                    unitPrice: p,
-                    amount: itemBase + itemTax,
-                    taxes: item.taxes || [],
-                };
-            });
-
             const masterBillPayload = {
                 client: data.clientId,
                 billNumber: data.summaryNumber || `INV-${Date.now().toString().slice(-6)}`,
                 date: data.date || new Date().toISOString(),
                 description: data.items.length === 1 ? data.items[0].description : "Combined Invoice",
                 category: data.items.length > 0 ? data.items[0].category : "General", 
-                quantity: 1,
-                unitPrice: masterBaseAmount,
-                baseAmount: masterBaseAmount,
-                taxAmount: masterTaxAmount,
-                amount: masterBaseAmount + masterTaxAmount,
-                items: formattedItems,
+                items: data.items,
                 documentType: docType,
+                status: "Unbilled"
             };
 
             const url = data._id ? `/api/bills/${data._id}` : "/api/bills";

@@ -29,8 +29,8 @@ export async function getClientsService(params: ClientQueryParams = {}) {
     limit = 10,
   } = params;
 
-  // Clamp limit to a safe range
-  const safeLimit = Math.min(Math.max(limit, 1), 100);
+  // Ensure limit is at least 1, but remove the artificial cap
+  const safeLimit = Math.max(limit, 1);
   const skip = (Math.max(page, 1) - 1) * safeLimit;
 
   // Build filter — case-insensitive name search

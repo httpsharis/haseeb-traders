@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/config/db";
 import BillModel from "@/models/billModel";
 import "@/models/clientModel";
+import { createBillService, updateBillService } from "@/services/billService";
 
 // 1. FORCE NEXT.JS TO NEVER CACHE THIS ROUTE (Crucial for App Router)
 export const dynamic = "force-dynamic";
@@ -44,29 +45,32 @@ export async function POST(req: Request) {
         }
         // THE UPSERT FIX: Check if the frontend sent an existing ID
         if (payload._id) {
-            // Update the existing document
-            const updatedBill = await BillModel.findByIdAndUpdate(
-                payload._id, 
-                payload, 
-                { new: true } 
-            );
+            // Update the existing document using the service to trigger the math engine
+            const updatedBill = await updateBillService(payload._id, payload);
             return NextResponse.json(updatedBill, { status: 200 });
         } else {
-            // Create a brand new document
+            // Create a brand new document using the service to trigger the math engine
             delete payload._id; 
-            const newBill = await BillModel.create(payload);
+            const newBill = await createBillService(payload);
             return NextResponse.json(newBill, { status: 201 });
         }
 
     } catch (error: unknown) {
         console.error("DATABASE REJECTION:", error);
         
-        // Strictly typed check for MongoDB duplicate key error
-        if (typeof error === "object" && error !== null && "code" in error) {
-            const dbError = error as { code: number };
-            if (dbError.code === 11000) {
+        // Strictly typed check for MongoDB errors
+        if (typeof error === "object" && error !== null) {
+            const errObj = error as Record<string, unknown>;
+            
+            if (errObj.code === 11000) {
                  return NextResponse.json({ 
                      error: "Duplicate Error: This Invoice Number is already used." 
+                 }, { status: 400 });
+            }
+
+            if (errObj.name === "ValidationError") {
+                 return NextResponse.json({ 
+                     error: errObj.message 
                  }, { status: 400 });
             }
         }

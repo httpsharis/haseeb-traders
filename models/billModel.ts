@@ -11,6 +11,7 @@ const taxChargeSchema = new Schema({
 
 // ── NEW: Line Item Sub-Schema ───────────────────────────
 const lineItemSchema = new Schema({
+  id: { type: String },
   description: { type: String, required: true },
   category: { type: String },
   quantity: { type: Number, required: true },
@@ -24,7 +25,7 @@ const billSchema = new Schema({
   client: { 
     type: Schema.Types.ObjectId, 
     ref: "Client", 
-    required: function(this: any) { return this.status !== "Draft"; }
+    required: function(this: { status?: string }) { return this.status !== "Draft"; }
   },
   summary: { 
     type: Schema.Types.ObjectId, 

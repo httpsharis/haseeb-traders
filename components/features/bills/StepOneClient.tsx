@@ -25,53 +25,20 @@ export default function Step1Client() {
   const searchParams = useSearchParams();
   const { data, updateData, resetDraft } = useBillDraft();
 
-  // ✅ 1. ALL STATE DECLARATIONS AT THE VERY TOP
-  const [clientId, setClientId] = useState(data.clientId || "");
-  const [clientName, setClientName] = useState(data.clientName || "");
-  const [summaryNumber, setSummaryNumber] = useState(data.summaryNumber || "");
-  const [date, setDate] = useState(
-    data.date || new Date().toISOString().split("T")[0],
-  );
-  const [taxPeriod, setTaxPeriod] = useState(data.taxPeriod || "");
-
-  // ✅ 2. USE EFFECTS BELOW STATE
   // Reset draft when arriving fresh (e.g. clicking "Create Bill" from sidebar)
   useEffect(() => {
     if (searchParams.get("fresh") === "true") {
-      setTimeout(() => {
-        resetDraft();
-        // Clear local form state perfectly
-        setClientId("");
-        setClientName("");
-        setSummaryNumber("");
-        setDate(new Date().toISOString().split("T")[0]);
-        setTaxPeriod("");
-
-        // Clean up the URL so back button doesn't trigger a reset
-        router.replace("/dashboard/bills/new", { scroll: false });
-      }, 0);
+      resetDraft();
+      // Clean up the URL so back button doesn't trigger a reset
+      router.replace("/dashboard/bills/new", { scroll: false });
     }
   }, [searchParams, resetDraft, router]);
 
-  // Sync inputs if draft gets wiped or injected from Edit Mode
-  useEffect(() => {
-    setTimeout(() => {
-      setClientId(data.clientId || "");
-      setClientName(data.clientName || "");
-      setSummaryNumber(data.summaryNumber || "");
-      setDate(data.date || new Date().toISOString().split("T")[0]);
-      setTaxPeriod(data.taxPeriod || "");
-    }, 0);
-  }, [data]);
-
   const handleClientSelect = (id: string, name: string) => {
-    setClientId(id);
-    setClientName(name);
     updateData({ clientId: id, clientName: name });
   };
 
   const handleNext = () => {
-    updateData({ clientId, clientName, summaryNumber, date, taxPeriod });
     router.push("/dashboard/bills/new/items");
   };
 
@@ -98,7 +65,7 @@ export default function Step1Client() {
             <Building2 className="h-4 w-4 text-stone-400" /> Client Information
           </h3>
           <ClientSelector
-            selectedName={clientName}
+            selectedName={data.clientName}
             onSelect={handleClientSelect}
           />
         </div>
@@ -109,15 +76,15 @@ export default function Step1Client() {
             <Hash className="h-4 w-4 text-stone-400" /> Bill Information
           </h3>
           <BillDetailsForm
-            clientName={clientName}
-            summaryNumber={summaryNumber}
-            setSummaryNumber={setSummaryNumber}
-            date={date}
-            setDate={setDate}
-            taxPeriod={taxPeriod}
-            setTaxPeriod={setTaxPeriod}
+            clientName={data.clientName}
+            summaryNumber={data.summaryNumber}
+            setSummaryNumber={(val) => updateData({ summaryNumber: val })}
+            date={data.date}
+            setDate={(val) => updateData({ date: val })}
+            taxPeriod={data.taxPeriod}
+            setTaxPeriod={(val) => updateData({ taxPeriod: val })}
             // ✅ Edit Shield Enabled!
-            isEditing={data.items && data.items.length > 0}
+            isEditing={!!data._id || (data.items && data.items.length > 0)}
             originalNumber={data.summaryNumber}
           />
         </div>
@@ -127,7 +94,7 @@ export default function Step1Client() {
       <div className="flex justify-end pt-4 border-t border-stone-200 mt-8">
         <Button
           onClick={handleNext}
-          disabled={!clientName || !summaryNumber || !date || !taxPeriod}
+          disabled={!data.clientName || !data.summaryNumber || !data.date || !data.taxPeriod}
           className="h-11 px-8 font-bold text-sm shadow-none rounded-lg transition-all disabled:opacity-50 bg-stone-900 hover:bg-stone-800 text-white"
         >
           Proceed to Line Items <ArrowRight className="ml-2 h-4 w-4" />
@@ -155,32 +122,41 @@ function ClientSelector({ selectedName, onSelect }: ClientSelectorProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState(selectedName || "");
+  const [prevSelectedName, setPrevSelectedName] = useState(selectedName);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showNewClient, setShowNewClient] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
 
-  useEffect(() => {
-    fetch("/api/clients?limit=100")
-      .then((res) => res.json())
-      .then((result) => {
-        setClients(result.data || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
+  // Sync prop to state without cascading effects
+  if (selectedName !== prevSelectedName) {
+    setPrevSelectedName(selectedName);
+    setSearchQuery(selectedName || "");
+  }
 
   useEffect(() => {
-    setTimeout(() => setSearchQuery(selectedName || ""), 0);
-  }, [selectedName]);
+    let isCurrent = true;
+    const delayDebounceFn = setTimeout(() => {
+      if (!isCurrent) return;
+      setLoading(true);
+      fetch(`/api/clients?limit=15&search=${encodeURIComponent(searchQuery || "")}`)
+        .then((res) => res.json())
+        .then((result) => {
+          if (!isCurrent) return;
+          setClients(result.data || []);
+          setLoading(false);
+        })
+        .catch(() => {
+          if (isCurrent) setLoading(false);
+        });
+    }, 300);
 
-  const filtered = clients.filter((c) => {
-    // 1. Give them fallback empty strings if they are undefined
-    const safeName = c.name || "";
-    const safeQuery = searchQuery || "";
+    return () => {
+      isCurrent = false;
+      clearTimeout(delayDebounceFn);
+    };
+  }, [searchQuery]);
 
-    // 2. Safely run the comparison
-    return safeName.toLowerCase().includes(safeQuery.toLowerCase());
-  });
+  const filtered = clients;
   const handleClientCreated = (newClient: Client) => {
     setClients([...clients, newClient]);
     onSelect(newClient._id, newClient.name);
@@ -309,31 +285,34 @@ function ClientSelector({ selectedName, onSelect }: ClientSelectorProps) {
       )}
 
       {showNewClient && (
-        <AddClientPopup
-          initialName={filtered.length === 0 ? searchQuery : ""}
-          onClose={() => setShowNewClient(false)}
-          onSuccess={handleClientCreated}
-        />
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setShowNewClient(false)} />
+          <InlineAddClient
+            initialName={filtered.length === 0 ? searchQuery : ""}
+            onClose={() => setShowNewClient(false)}
+            onSuccess={handleClientCreated}
+          />
+        </>
       )}
     </div>
   );
 }
 
 // ============================================================================
-// SUB-COMPONENT 2: Add Client Popup
+// SUB-COMPONENT 2: Inline Add Client
 // ============================================================================
 
-interface AddClientPopupProps {
+interface InlineAddClientProps {
   initialName?: string;
   onClose: () => void;
   onSuccess: (newClient: { _id: string; name: string }) => void;
 }
 
-function AddClientPopup({
+function InlineAddClient({
   initialName = "",
   onClose,
   onSuccess,
-}: AddClientPopupProps) {
+}: InlineAddClientProps) {
   const [newClientName, setNewClientName] = useState(initialName);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -372,56 +351,48 @@ function AddClientPopup({
   };
 
   return (
-    <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden border border-stone-100 animate-in zoom-in-95 duration-200">
-        <div className="p-6">
-          <div className="mb-6">
-            <h2 className="text-xl font-black text-stone-900 tracking-tight">
-              Add New Client
-            </h2>
-            <p className="text-sm font-medium text-stone-500 mt-1">
-              Create a new profile to start generating invoices.
-            </p>
-          </div>
+    <div className="absolute z-30 w-full mt-2 bg-white border border-stone-200 rounded-xl shadow-2xl overflow-hidden origin-top transform transition-all opacity-100 scale-100">
+      <div className="p-4 border-b border-stone-100 bg-stone-50/80">
+        <h4 className="font-black text-sm text-stone-900 tracking-tight">Add New Client</h4>
+        <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest mt-0.5">Quick Create Profile</p>
+      </div>
+      <div className="p-4 space-y-4 bg-white">
+        <div>
+          <Input
+            autoFocus
+            placeholder="e.g. Acme Corp"
+            value={newClientName}
+            onChange={(e) => setNewClientName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newClientName.trim()) {
+                e.preventDefault();
+                handleCreateClient();
+              } else if (e.key === "Escape") {
+                onClose();
+              }
+            }}
+            className="h-10 w-full bg-white border-stone-200 text-stone-900 placeholder:text-stone-300 focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary transition-all shadow-none rounded-lg font-bold"
+          />
+          {errorMessage && (
+            <p className="mt-2 text-[11px] font-bold text-red-600">{errorMessage}</p>
+          )}
+        </div>
 
-          <div className="mb-8">
-            <label className="block text-[11px] font-bold text-stone-500 uppercase tracking-widest mb-2">
-              Client Name
-            </label>
-            <Input
-              placeholder="e.g. Acme Corp"
-              value={newClientName}
-              onChange={(e) => setNewClientName(e.target.value)}
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && newClientName.trim()) {
-                  e.preventDefault();
-                  handleCreateClient();
-                }
-              }}
-              className="h-11 w-full bg-stone-50/50 border-stone-200 text-stone-900 placeholder:text-stone-400 focus-visible:ring-1 focus-visible:ring-stone-900 focus-visible:border-stone-900 transition-all shadow-none rounded-lg font-medium"
-            />
-            {errorMessage && (
-              <p className="mt-2 text-sm font-medium text-red-600">{errorMessage}</p>
-            )}
-          </div>
-
-          <div className="flex justify-end gap-3">
-            <Button
-              variant="ghost"
-              onClick={onClose}
-              className="h-10 px-4 text-stone-500 hover:text-stone-900 hover:bg-stone-100 font-bold rounded-lg shadow-none"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateClient}
-              disabled={saving || !newClientName.trim()}
-              className="h-10 px-6 font-bold shadow-none rounded-lg disabled:opacity-50 bg-primary text-white hover:bg-primary/90"
-            >
-              {saving ? "Saving..." : "Save Client"}
-            </Button>
-          </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            className="h-9 px-4 text-xs text-stone-500 hover:text-stone-900 hover:bg-stone-100 font-bold rounded-lg shadow-none"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCreateClient}
+            disabled={saving || !newClientName.trim()}
+            className="h-9 px-5 text-xs font-bold shadow-md shadow-orange-500/10 rounded-lg disabled:opacity-50 bg-[#ea580c] hover:bg-[#d44d0a] text-white"
+          >
+            {saving ? "Saving..." : "Save Client"}
+          </Button>
         </div>
       </div>
     </div>

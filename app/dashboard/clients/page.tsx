@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Users, Building2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Users, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DataTable, ColumnDef } from "@/components/ui/DataPage";

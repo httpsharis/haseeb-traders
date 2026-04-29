@@ -1,4 +1,4 @@
-import { Plus, ReceiptText, Clock, FileStack, Settings, Users } from "lucide-react";
+import { ReceiptText, Clock, FileStack, Settings, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
@@ -118,8 +118,9 @@ export default async function Dashboard() {
     totalSummaries: statsData.totalSummaries,
   };
 
-  const safeCombinedActivity = JSON.parse(JSON.stringify(combinedActivity));
-  const safeTopClients = JSON.parse(JSON.stringify(topClients));
+  // Objects are plain JS objects now due to .lean() and aggregate()
+  const safeCombinedActivity = combinedActivity;
+  const safeTopClients = topClients;
 
   return (
     <div className="max-w-350 mx-auto pt-6 space-y-6 px-6 pb-12">

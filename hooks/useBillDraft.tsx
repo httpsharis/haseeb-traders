@@ -16,6 +16,7 @@ export interface TaxCharge {
 
 export interface LineItem {
   id: string;
+  _id?: string;
   billNumber?: string;
   date?: string;
   description: string;
@@ -37,10 +38,27 @@ export interface BillDraftData {
   discount: number;
   commission: number;
   status?: string;
+  baseAmount?: number;
+  taxAmount?: number;
+  amount?: number;
+}
+
+export interface BillServerResponse {
+  _id: string;
+  baseAmount: number;
+  taxAmount: number;
+  amount: number;
+  items: Array<{
+    id: string;
+    _id: string;
+    amount: number;
+    taxes: TaxCharge[];
+  }>;
 }
 
 interface BillDraftContextType {
   data: BillDraftData;
+  error: string | null;
   updateData: (updates: Partial<BillDraftData>) => void;
   addItem: (item: LineItem) => void;
   updateItem: (id: string, updates: Partial<LineItem>) => void;
@@ -60,6 +78,9 @@ const defaultData: BillDraftData = {
   summaryTaxes: [],
   discount: 0,
   commission: 0,
+  baseAmount: 0,
+  taxAmount: 0,
+  amount: 0,
 };
 
 // ============================================================================
@@ -72,6 +93,7 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
   const draftId = searchParams?.get("draftId");
   
   const [data, setData] = useState<BillDraftData>(defaultData);
+  const [error, setError] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // 1. DATABASE LOAD: Hydrate from API
@@ -129,7 +151,7 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
 
     const saveDraftTimer = setTimeout(async () => {
       try {
-        const payload: any = { ...data };
+        const payload: Partial<BillDraftData> & { client?: string } = { ...data };
         
         // Mongo map fields appropriately
         if (payload.clientId) {
@@ -138,12 +160,47 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
              delete payload.client; // Strip client if empty to prevent MongoDB cast errors
         }
 
-        await fetch(`/api/bills`, {
+        const res = await fetch(`/api/bills`, {
           method: "POST", // The route handles upsert automatically
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        
+        if (res.ok) {
+            setError(null);
+            const updatedDbRecord: BillServerResponse = await res.json();
+            
+            setData(prev => {
+                // Safely merge math fields without overwriting user's active keystrokes
+                const safeItems = prev.items.map(prevItem => {
+                    const serverItem = updatedDbRecord.items?.find((si) => si.id === prevItem.id || si._id === prevItem._id);
+                    if (!serverItem) return prevItem;
+                    return {
+                        ...prevItem,
+                        amount: serverItem.amount,
+                        taxes: serverItem.taxes,
+                    };
+                });
+
+                return {
+                    ...prev,
+                    _id: updatedDbRecord._id,
+                    items: safeItems,
+                    baseAmount: updatedDbRecord.baseAmount,
+                    taxAmount: updatedDbRecord.taxAmount,
+                    amount: updatedDbRecord.amount
+                };
+            });
+
+            if (!data._id && updatedDbRecord._id && !draftId) {
+                window.history.replaceState(null, '', `?draftId=${updatedDbRecord._id}`);
+            }
+        } else {
+            const errorData = await res.json();
+            setError(errorData.error || "Failed to auto-save");
+        }
       } catch (err) {
+        setError(err instanceof Error ? err.message : "Network error during auto-save");
         console.error("Auto-save failed", err);
       }
     }, 1200); // 1.2 second debounce
@@ -168,17 +225,6 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
         if (item.id !== id) return item;
 
         const updatedItem = { ...item, ...updates };
-
-        // Automatically recalculate taxes if quantity or unitPrice changed
-        if (updatedItem.taxes && updatedItem.taxes.length > 0) {
-          const newBase = updatedItem.quantity * updatedItem.unitPrice;
-          updatedItem.taxes = updatedItem.taxes.map(t => ({
-            ...t,
-            baseAmount: newBase,
-            amount: (newBase * t.percentage) / 100
-          }));
-        }
-
         return updatedItem;
       }),
     }));
@@ -191,18 +237,12 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
   // 5. Tax Mathematics
   const applyTaxesToItems = (taxes: TaxCharge[]) => {
     setData((prev) => {
-      const subtotal = prev.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-      if (subtotal === 0) return prev;
-
       const updatedItems = prev.items.map((item) => {
-        const itemAmount = item.quantity * item.unitPrice;
-        const proportion = itemAmount / subtotal;
-
         const itemTaxes: TaxCharge[] = taxes.map((tax) => ({
           name: tax.name,
           percentage: tax.percentage,
-          baseAmount: tax.baseAmount * proportion,
-          amount: tax.amount * proportion,
+          baseAmount: 0, // Backend will calculate this
+          amount: 0,     // Backend will calculate this
         }));
 
         return { ...item, taxes: itemTaxes };
@@ -223,7 +263,7 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
 
   return (
     <BillDraftContext.Provider
-      value={{ data, updateData, addItem, updateItem, removeItem, applyTaxesToItems, resetDraft }}
+      value={{ data, error, updateData, addItem, updateItem, removeItem, applyTaxesToItems, resetDraft }}
     >
       {children}
     </BillDraftContext.Provider>

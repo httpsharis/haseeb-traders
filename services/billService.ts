@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import billModel from "@/models/billModel";
 import { Bill, LineItem } from "@/types";
 import { Decimal } from "decimal.js";
@@ -71,12 +72,12 @@ export async function createBillService(data: Partial<Bill>) {
 
 // ── Get all bills for a specific summary ────────────────
 export async function getBillsBySummaryService(summaryId: string) {
-  return await billModel.find({ summary: summaryId }).sort({ createdAt: -1 });
+  return await billModel.find({ summary: summaryId }).sort({ createdAt: -1 }).lean();
 }
 
 // ── Get a single bill by its ID ─────────────────────────
 export async function getSingleBillService(id: string) {
-  return await billModel.findById(id).populate("client", "name companyName");
+  return await billModel.findById(id).populate("client", "name companyName").lean();
 }
 
 // ── Update an existing bill ─────────────────────────────
@@ -107,7 +108,18 @@ export async function deleteBillService(id: string) {
 
 // ── Delete all bills for a summary (cascade) ────────────
 export async function deleteBillsBySummaryService(summaryId: string) {
-  return await billModel.deleteMany({ summary: summaryId });
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const result = await billModel.deleteMany({ summary: summaryId }).session(session);
+    await session.commitTransaction();
+    return result;
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
 }
 
 // ── Dashboard: Get Stats ────────────────────────────────
@@ -179,7 +191,7 @@ export async function getRecentActivityService(limit: number = 20) {
         }
       }
     ]),
-    billModel.find().sort({ createdAt: -1 }).limit(limit).populate("client", "name companyName"),
+    billModel.find().sort({ createdAt: -1 }).limit(limit).populate("client", "name companyName").lean(),
   ]);
 
   return {
