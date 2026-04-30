@@ -1,14 +1,14 @@
-import { ReceiptText, Clock, FileStack, Settings, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Clock, FileStack, ReceiptText, Settings, Users } from "lucide-react";
 import Link from "next/link";
 
 import { RecentActivity } from "@/components/features/dashboard/RecentActivity";
 import { TopClients } from "@/components/features/dashboard/TopClient";
 import type { ActivityItem, TopClient } from "@/types";
 
+import { CreateBillActionBuilder } from "@/components/features/bills/CreateBillActionBuilder";
 import { connectDB } from "@/config/db";
 import { getDashboardStatsService, getRecentActivityService } from "@/services/billService";
-import { CreateBillActionBuilder } from "@/components/features/bills/CreateBillActionBuilder";
 
 interface DBId {
   toString: () => string;
@@ -119,7 +119,7 @@ export default async function Dashboard() {
   };
 
   // Objects are plain JS objects now due to .lean() and aggregate()
-  const safeCombinedActivity = combinedActivity;
+const safeCombinedActivity = JSON.parse(JSON.stringify(combinedActivity));
   const safeTopClients = topClients;
 
   return (

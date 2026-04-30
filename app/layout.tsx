@@ -1,6 +1,6 @@
+import { Inter } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
-import { Inter } from "next/font/google";
 
 import type { Metadata, Viewport } from "next";
 
@@ -14,6 +14,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+
+  metadataBase: new URL("https://haseebtraders.com"),
+  
   title: "Haseeb Traders | Billing & Invoicing",
   description: "Professional invoice management and client billing system for Haseeb Traders.",
   openGraph: {

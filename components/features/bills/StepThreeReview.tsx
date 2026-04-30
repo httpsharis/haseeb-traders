@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { CheckCircle2, Printer, Download, Loader2, AlertCircle, ArrowLeft, FileText, LayoutTemplate, ReceiptText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useBillDraft, LineItem } from "@/hooks/useBillDraft";
+import { LineItem, useBillDraft } from "@/hooks/useBillDraft";
+import { AlertCircle, ArrowLeft, CheckCircle2, Download, FileText, LayoutTemplate, Loader2, Printer, ReceiptText } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 // ============================================================================
 // SHARED UTILITIES
@@ -75,9 +75,10 @@ interface PrintLayoutProps {
 function PrintLayout({ docType, printFormat }: PrintLayoutProps) {
     const { data } = useBillDraft();
 
-    const baseAmount = data.baseAmount || 0;
+    // ✅ DYNAMIC MATH: Calculate Subtotal directly from items
+    const computedSubtotal = data.items.reduce((sum: number, item: LineItem) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
     const gstAmount = data.taxAmount || 0;
-    const grandTotal = data.amount || 0;
+    const grandTotal = computedSubtotal + gstAmount;
 
     // If Letterhead, add massive top padding for the physical printer and hide digital header
     const isLetterhead = printFormat === "LETTERHEAD";
@@ -160,7 +161,7 @@ function PrintLayout({ docType, printFormat }: PrintLayoutProps) {
                     <div className="w-72 space-y-4 text-sm">
                         <div className="flex justify-between items-center text-stone-600">
                             <span className="font-medium">Subtotal</span>
-                            <span className="font-black text-stone-900">{formatMoney(baseAmount)}</span>
+                            <span className="font-black text-stone-900">{formatMoney(computedSubtotal)}</span>
                         </div>
                         {gstAmount > 0 && (
                             <div className="flex justify-between items-center text-stone-600">
@@ -213,6 +214,11 @@ function ReviewSidebar({ docType, setDocType, printFormat, setPrintFormat }: Sid
         setError("");
 
         try {
+            // ✅ DYNAMIC MATH: Calculate totals securely before saving to DB
+            const computedSubtotal = data.items.reduce((sum: number, item: LineItem) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
+            const gstAmount = data.taxAmount || 0;
+            const grandTotal = computedSubtotal + gstAmount;
+
             const masterBillPayload = {
                 client: data.clientId,
                 billNumber: data.summaryNumber || `INV-${Date.now().toString().slice(-6)}`,
@@ -220,6 +226,10 @@ function ReviewSidebar({ docType, setDocType, printFormat, setPrintFormat }: Sid
                 description: data.items.length === 1 ? data.items[0].description : "Combined Invoice",
                 category: data.items.length > 0 ? data.items[0].category : "General", 
                 items: data.items,
+                // Include the computed totals!
+                baseAmount: computedSubtotal,
+                taxAmount: gstAmount,
+                amount: grandTotal,
                 documentType: docType,
                 status: "Unbilled"
             };

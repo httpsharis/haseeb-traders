@@ -1,20 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import {
-  CalendarIcon,
-  Clock,
-  Hash,
-  Search,
-  CheckCircle2,
-  Plus,
-  Building2,
-  ArrowRight,
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useBillDraft } from "@/hooks/useBillDraft";
+import {
+  ArrowRight,
+  Building2,
+  CalendarIcon,
+  CheckCircle2,
+  Clock,
+  Hash,
+  Plus,
+  Search,
+} from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 // ============================================================================
 // MAIN COMPONENT
@@ -25,9 +25,13 @@ export default function Step1Client() {
   const searchParams = useSearchParams();
   const { data, updateData, resetDraft } = useBillDraft();
 
+  // ✅ THE LOCK: Prevents the router from causing an infinite reset loop
+  const hasReset = useRef(false);
+
   // Reset draft when arriving fresh (e.g. clicking "Create Bill" from sidebar)
   useEffect(() => {
-    if (searchParams.get("fresh") === "true") {
+    if (searchParams.get("fresh") === "true" && !hasReset.current) {
+      hasReset.current = true; // Lock it down immediately!
       resetDraft();
       // Clean up the URL so back button doesn't trigger a reset
       router.replace("/dashboard/bills/new", { scroll: false });
@@ -216,11 +220,10 @@ function ClientSelector({ selectedName, onSelect }: ClientSelectorProps) {
             }}
             onFocus={() => setShowDropdown(true)}
             onKeyDown={handleKeyDown}
-            className={`pl-10 h-11 transition-all rounded-lg font-medium shadow-none ${
-              selectedName
+            className={`pl-10 h-11 transition-all rounded-lg font-medium shadow-none ${selectedName
                 ? "bg-green-50/30 border-green-200 text-green-900 focus:ring-green-500 focus:border-green-500"
                 : "bg-stone-50/50 border-stone-200 text-stone-900 focus:bg-white focus:ring-1 focus:ring-stone-900 focus:border-stone-900"
-            }`}
+              }`}
           />
         </div>
         <Button
@@ -252,7 +255,7 @@ function ClientSelector({ selectedName, onSelect }: ClientSelectorProps) {
                   setShowNewClient(true);
                 }}
               >
-                <Plus className="h-4 w-4 mr-2" /> Add &quot{searchQuery}&quot
+                <Plus className="h-4 w-4 mr-2" /> Add &quot;{searchQuery}&quot;
               </Button>
             </div>
           ) : (
@@ -462,11 +465,15 @@ function BillDetailsForm({
 
   // ✅ THE SHIELD: Protects injected edit data from being overwritten
   useEffect(() => {
+    // 1. Handle Edit Mode
     if (isEditing && originalNumber) {
-      setSummaryNumber(originalNumber);
+      if (summaryNumber !== originalNumber) {
+        setSummaryNumber(originalNumber);
+      }
       return;
     }
 
+    // 2. Handle Creation Mode
     if (baseSequence !== null && clientName && taxPeriod) {
       const initials = clientName
         .split(" ")
@@ -478,9 +485,17 @@ function BillDetailsForm({
       const formattedPeriod = `${month.toUpperCase()}${year.substring(2)}`;
       const paddedSeq = String(baseSequence).padStart(3, "0");
 
-      setSummaryNumber(`${initials}-${formattedPeriod}-${paddedSeq}`);
+      const generatedNumber = `${initials}-${formattedPeriod}-${paddedSeq}`;
+
+      // Prevent infinite loop by checking before updating
+      if (summaryNumber !== generatedNumber) {
+        setSummaryNumber(generatedNumber);
+      }
     } else if (baseSequence !== null) {
-      setSummaryNumber(String(baseSequence).padStart(3, "0"));
+      const defaultNumber = String(baseSequence).padStart(3, "0");
+      if (summaryNumber !== defaultNumber) {
+        setSummaryNumber(defaultNumber);
+      }
     }
   }, [
     clientName,
@@ -489,6 +504,7 @@ function BillDetailsForm({
     setSummaryNumber,
     isEditing,
     originalNumber,
+    summaryNumber // <-- Added to dependency array
   ]);
 
   return (

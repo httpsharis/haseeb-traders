@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Moon, Sun, Settings as SettingsIcon, Building2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Building2, Moon, Settings as SettingsIcon, Sun } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export default function SettingsPage() {
   const [isDark, setIsDark] = useState(false);
@@ -61,7 +61,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500 dark:text-slate-400">Location</span>
-            <span className="font-semibold text-slate-900 dark:text-slate-100">Main Business Market, Multan</span>
+            <span className="font-semibold text-slate-900 dark:text-slate-100">House 139, Street 3, Gareebabad Khanewal</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500 dark:text-slate-400">System</span>
