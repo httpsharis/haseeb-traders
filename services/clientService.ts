@@ -1,5 +1,5 @@
 import ClientModel from "@/models/clientModel";
-import { Client } from "@/types"; 
+import { Client } from "@/types";
 
 // ── Query params for client search/pagination ───────────
 export interface ClientQueryParams {
@@ -11,7 +11,7 @@ export interface ClientQueryParams {
 // ── Update a client ─────────────────────────────────────
 export async function updateClientService(id: string, body: Partial<Client>) {
   return await ClientModel.findByIdAndUpdate(id, body, { 
-      new: true,
+      returnDocument: 'after',
       runValidators: true // Enforces Mongoose schema rules on update
   });
 }

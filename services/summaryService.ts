@@ -1,6 +1,6 @@
-import SummaryModel from "@/models/summaryModel";
 import BillModel from "@/models/billModel";
 import ClientModel from "@/models/clientModel";
+import SummaryModel from "@/models/summaryModel";
 import { Summary } from "@/types";
 
 // ── Strict Interfaces to silence TypeScript Errors ──────
@@ -152,7 +152,7 @@ export async function updateSummaryService(id: string, data: Partial<Summary>) {
     return await SummaryModel.findByIdAndUpdate(
         id,
         updateData,
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
     );
 }
 

@@ -1,5 +1,5 @@
 import CategoryModel from "@/models/categoryModel";
-import { Category } from "@/types"; 
+import { Category } from "@/types";
 
 // ── Get all categories ──────────────────────────────────
 // Returns all categories, sorted alphabetically.
@@ -32,7 +32,7 @@ export async function createCategoryService(data: Partial<Category>) {
 // ── Update a category ───────────────────────────────────
 export async function updateCategoryService(id: string, data: Partial<Category>) {
   return await CategoryModel.findByIdAndUpdate(id, data, {
-    new: true,
+    returnDocument: 'after',
     runValidators: true,
   });
 }

@@ -1,5 +1,5 @@
 import TaxTypeModel from "@/models/taxTypeModel";
-import { TaxRule } from "@/types"; 
+import { TaxRule } from "@/types";
 
 // ── Get all tax types ───────────────────────────────────
 // Returns all tax types, sorted alphabetically.
@@ -39,7 +39,7 @@ export async function createTaxTypeService(data: Partial<TaxRule> & { isActive?:
 // ── Update a tax type ───────────────────────────────────
 export async function updateTaxTypeService(id: string, data: Partial<TaxRule> & { isActive?: boolean }) {
   return await TaxTypeModel.findByIdAndUpdate(id, data, {
-    new: true,
+    returnDocument: 'after',
     runValidators: true,
   });
 }

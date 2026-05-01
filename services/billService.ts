@@ -1,9 +1,9 @@
-import mongoose from "mongoose";
 import billModel from "@/models/billModel";
+import "@/models/clientModel";
+import SummaryModel from "@/models/summaryModel";
 import { Bill, LineItem } from "@/types";
 import { Decimal } from "decimal.js";
-import SummaryModel from "@/models/summaryModel";
-import "@/models/clientModel";
+import mongoose from "mongoose";
 // ── THE MATH ENGINE ─────────────────────────────────────
 // Automatically calculates all base amounts and taxes for line items
 // ── THE MATH ENGINE ─────────────────────────────────────
@@ -96,7 +96,7 @@ export async function updateBillService(id: string, data: Partial<Bill>) {
   }
 
   return await billModel.findByIdAndUpdate(id, updatePayload, {
-    new: true,
+    returnDocument: 'after',
     runValidators: true,
   });
 }
