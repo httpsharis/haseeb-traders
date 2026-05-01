@@ -5,7 +5,7 @@ import { Plus, Trash2, Search, ArrowRight, Printer, ReceiptText } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
-import { useBillDraft, LineItem, TaxCharge } from "@/hooks/useBillDraft";
+import { useBillDraft, LineItem } from "@/hooks/useBillDraft";
 import { useRouter } from "next/navigation";
 
 // ============================================================================
@@ -248,19 +248,12 @@ function LineItemsTable() {
 // ============================================================================
 function LiveDraftSidebar() {
     const router = useRouter(); // ✅ Make sure this is defined!
-    const { data } = useBillDraft();
+    const { data, error } = useBillDraft();
 
-    // ✅ FIXED MATH: Safely forcing numbers to prevent calculation errors
-    const baseAmount = data.items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitPrice)), 0);
-
-    const gstAmount = data.items.reduce((sum, item) => {
-        const itemGst = item.taxes?.find(t => t.name === "GST");
-        // Dynamically recalculating the exact GST just to be 100% safe
-        const calculatedGst = itemGst ? (Number(item.quantity) * Number(item.unitPrice) * Number(itemGst.percentage)) / 100 : 0;
-        return sum + calculatedGst;
-    }, 0);
-
-    const grandTotal = baseAmount + gstAmount;
+    // ✅ FIXED MATH: Now fully relying on the backend single source of truth
+    const baseAmount = data.baseAmount || 0;
+    const gstAmount = data.taxAmount || 0;
+    const grandTotal = data.amount || 0;
 
     return (
         <Card className="shadow-xl shadow-stone-200/40 border-stone-200 rounded-2xl sticky top-6 overflow-hidden">
@@ -271,6 +264,11 @@ function LiveDraftSidebar() {
                 </div>
             </CardHeader>
             <CardContent className="p-6 space-y-6 bg-white">
+                {error && (
+                    <div className="p-3 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200">
+                        ⚠️ Auto-save Error: {error}
+                    </div>
+                )}
                 <div className="space-y-3">
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-stone-500 font-bold">Base Amount</span>
@@ -325,12 +323,9 @@ function PrintLayout() {
 
     if (!data || !data.items) return null;
 
-    const baseAmount = data.items.reduce((sum: number, item: LineItem) => sum + (item.quantity * item.unitPrice), 0);
-    const gstAmount = data.items.reduce((sum: number, item: LineItem) => {
-        const itemGst = item.taxes?.find((t: TaxCharge) => t.name === "GST");
-        return sum + (itemGst ? itemGst.amount : 0);
-    }, 0);
-    const grandTotal = baseAmount + gstAmount;
+    const baseAmount = data.baseAmount || 0;
+    const gstAmount = data.taxAmount || 0;
+    const grandTotal = data.amount || 0;
 
     return (
         <div className="bg-white p-8">

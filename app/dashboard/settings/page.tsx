@@ -1,16 +1,29 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Moon, Sun, Settings as SettingsIcon, Building2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Building2, Moon, Settings as SettingsIcon, Sun } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export default function SettingsPage() {
   const [isDark, setIsDark] = useState(false);
 
-  // Read current theme on mount
+  // Read and apply current theme on mount
   useEffect(() => {
-    const html = document.documentElement;
-    setIsDark(html.classList.contains("dark"));
+    let mounted = true;
+    Promise.resolve().then(() => {
+      if (!mounted) return;
+      const saved = localStorage.getItem("theme");
+      if (saved === "dark") {
+        document.documentElement.classList.add("dark");
+        setIsDark(true);
+      } else if (saved === "light") {
+        document.documentElement.classList.remove("dark");
+        setIsDark(false);
+      } else {
+        setIsDark(document.documentElement.classList.contains("dark"));
+      }
+    });
+    return () => { mounted = false; };
   }, []);
 
   const toggleTheme = () => {
@@ -24,15 +37,6 @@ export default function SettingsPage() {
     }
     setIsDark(!isDark);
   };
-
-  // Apply saved theme on initial load
-  useEffect(() => {
-    const saved = localStorage.getItem("theme");
-    if (saved === "dark") {
-      document.documentElement.classList.add("dark");
-      setIsDark(true);
-    }
-  }, []);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -57,7 +61,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500 dark:text-slate-400">Location</span>
-            <span className="font-semibold text-slate-900 dark:text-slate-100">Main Business Market, Multan</span>
+            <span className="font-semibold text-slate-900 dark:text-slate-100">House 139, Street 3, Gareebabad Khanewal</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500 dark:text-slate-400">System</span>

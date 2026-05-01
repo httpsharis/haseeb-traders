@@ -152,7 +152,7 @@ export default function EditSummaryTaxesPage() {
 
                         foundBills = extractedBills.filter((b: BillType) => billIds.includes(b._id));
                     }
-                } catch (e) {
+                } catch {
                     console.warn("Could not fetch bills.");
                 }
 
@@ -208,7 +208,7 @@ export default function EditSummaryTaxesPage() {
     const mathResults = useMemo(() => {
         const combinedBillsTotal = bills.reduce((sum, bill) => sum + getBaseAmount(bill), 0);
         let currentSubtotal = combinedBillsTotal;
-        let totalIncomeTaxToPay = 0;
+
         
         type CalculatedRecord = GlobalAppliedTax & { calculatedAmount: number };
         const processedTaxes: CalculatedRecord[] = [];
@@ -216,13 +216,17 @@ export default function EditSummaryTaxesPage() {
         globalTaxes.filter(t => t.target === "BaseAmount").forEach(tax => {
             const amount = combinedBillsTotal * (tax.percentage / 100);
             processedTaxes.push({ ...tax, calculatedAmount: amount });
-            tax.impact === "DisplayOnly" ? totalIncomeTaxToPay += amount : currentSubtotal += amount;
+            if (tax.impact !== "DisplayOnly") {
+                currentSubtotal += amount;
+            }
         });
 
         globalTaxes.filter(t => t.target === "SubtotalAmount").forEach(tax => {
             const amount = currentSubtotal * (tax.percentage / 100);
             processedTaxes.push({ ...tax, calculatedAmount: amount });
-            tax.impact === "DisplayOnly" ? totalIncomeTaxToPay += amount : currentSubtotal += amount;
+            if (tax.impact !== "DisplayOnly") {
+                currentSubtotal += amount;
+            }
         });
 
         return {

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { CheckCircle2, Printer, Download, Loader2, AlertCircle, ArrowLeft, FileText, LayoutTemplate, ReceiptText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useBillDraft, LineItem, TaxCharge } from "@/hooks/useBillDraft";
+import { LineItem, useBillDraft } from "@/hooks/useBillDraft";
+import { AlertCircle, ArrowLeft, CheckCircle2, Download, FileText, LayoutTemplate, Loader2, Printer, ReceiptText } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 // ============================================================================
 // SHARED UTILITIES
@@ -75,12 +75,10 @@ interface PrintLayoutProps {
 function PrintLayout({ docType, printFormat }: PrintLayoutProps) {
     const { data } = useBillDraft();
 
-    const baseAmount = data.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-    const gstAmount = data.items.reduce((sum, item) => {
-        const itemGst = item.taxes?.find(t => t.name === "GST");
-        return sum + (itemGst ? itemGst.amount : 0);
-    }, 0);
-    const grandTotal = baseAmount + gstAmount;
+    // ✅ DYNAMIC MATH: Calculate Subtotal directly from items
+    const computedSubtotal = data.items.reduce((sum: number, item: LineItem) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
+    const gstAmount = data.taxAmount || 0;
+    const grandTotal = computedSubtotal + gstAmount;
 
     // If Letterhead, add massive top padding for the physical printer and hide digital header
     const isLetterhead = printFormat === "LETTERHEAD";
@@ -163,7 +161,7 @@ function PrintLayout({ docType, printFormat }: PrintLayoutProps) {
                     <div className="w-72 space-y-4 text-sm">
                         <div className="flex justify-between items-center text-stone-600">
                             <span className="font-medium">Subtotal</span>
-                            <span className="font-black text-stone-900">{formatMoney(baseAmount)}</span>
+                            <span className="font-black text-stone-900">{formatMoney(computedSubtotal)}</span>
                         </div>
                         {gstAmount > 0 && (
                             <div className="flex justify-between items-center text-stone-600">
@@ -216,30 +214,10 @@ function ReviewSidebar({ docType, setDocType, printFormat, setPrintFormat }: Sid
         setError("");
 
         try {
-            let masterBaseAmount = 0;
-            let masterTaxAmount = 0;
-
-            const formattedItems = data.items.map((item: LineItem) => {
-                const q = Number(item.quantity) || 1;
-                const p = Number(item.unitPrice) || 0;
-                const itemBase = q * p;
-
-                const itemTax = Array.isArray(item.taxes)
-                    ? item.taxes.reduce((sum: number, t: TaxCharge) => sum + (Number(t.amount) || 0), 0)
-                    : 0;
-
-                masterBaseAmount += itemBase;
-                masterTaxAmount += itemTax;
-
-                return {
-                    description: item.description || "Item",
-                    category: item.category || "General",
-                    quantity: q,
-                    unitPrice: p,
-                    amount: itemBase + itemTax,
-                    taxes: item.taxes || [],
-                };
-            });
+            // ✅ DYNAMIC MATH: Calculate totals securely before saving to DB
+            const computedSubtotal = data.items.reduce((sum: number, item: LineItem) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
+            const gstAmount = data.taxAmount || 0;
+            const grandTotal = computedSubtotal + gstAmount;
 
             const masterBillPayload = {
                 client: data.clientId,
@@ -247,13 +225,13 @@ function ReviewSidebar({ docType, setDocType, printFormat, setPrintFormat }: Sid
                 date: data.date || new Date().toISOString(),
                 description: data.items.length === 1 ? data.items[0].description : "Combined Invoice",
                 category: data.items.length > 0 ? data.items[0].category : "General", 
-                quantity: 1,
-                unitPrice: masterBaseAmount,
-                baseAmount: masterBaseAmount,
-                taxAmount: masterTaxAmount,
-                amount: masterBaseAmount + masterTaxAmount,
-                items: formattedItems,
+                items: data.items,
+                // Include the computed totals!
+                baseAmount: computedSubtotal,
+                taxAmount: gstAmount,
+                amount: grandTotal,
                 documentType: docType,
+                status: "Unbilled"
             };
 
             const url = data._id ? `/api/bills/${data._id}` : "/api/bills";

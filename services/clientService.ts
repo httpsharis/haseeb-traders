@@ -29,8 +29,8 @@ export async function getClientsService(params: ClientQueryParams = {}) {
     limit = 10,
   } = params;
 
-  // Clamp limit to a safe range
-  const safeLimit = Math.min(Math.max(limit, 1), 100);
+  // Ensure limit is at least 1, but remove the artificial cap
+  const safeLimit = Math.max(limit, 1);
   const skip = (Math.max(page, 1) - 1) * safeLimit;
 
   // Build filter — case-insensitive name search
@@ -65,7 +65,19 @@ export async function createClientService(data: Partial<Client>) {
   if (!data.name) {
       throw new Error("Client name is required.");
   }
-  return await ClientModel.create(data);
+  try {
+    return await ClientModel.create(data);
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: number }).code === 11000
+    ) {
+      throw new Error("A client with this name already exists.");
+    }
+    throw error;
+  }
 }
 
 // ── Get a single client by ID ───────────────────────────

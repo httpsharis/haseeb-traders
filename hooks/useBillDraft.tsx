@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -15,6 +16,7 @@ export interface TaxCharge {
 
 export interface LineItem {
   id: string;
+  _id?: string;
   billNumber?: string;
   date?: string;
   description: string;
@@ -35,10 +37,28 @@ export interface BillDraftData {
   summaryTaxes: TaxCharge[];
   discount: number;
   commission: number;
+  status?: string;
+  baseAmount?: number;
+  taxAmount?: number;
+  amount?: number;
+}
+
+export interface BillServerResponse {
+  _id: string;
+  baseAmount: number;
+  taxAmount: number;
+  amount: number;
+  items: Array<{
+    id: string;
+    _id: string;
+    amount: number;
+    taxes: TaxCharge[];
+  }>;
 }
 
 interface BillDraftContextType {
   data: BillDraftData;
+  error: string | null;
   updateData: (updates: Partial<BillDraftData>) => void;
   addItem: (item: LineItem) => void;
   updateItem: (id: string, updates: Partial<LineItem>) => void;
@@ -58,6 +78,9 @@ const defaultData: BillDraftData = {
   summaryTaxes: [],
   discount: 0,
   commission: 0,
+  baseAmount: 0,
+  taxAmount: 0,
+  amount: 0,
 };
 
 // ============================================================================
@@ -66,39 +89,131 @@ const defaultData: BillDraftData = {
 const BillDraftContext = createContext<BillDraftContextType | undefined>(undefined);
 
 export function BillDraftProvider({ children }: { children: ReactNode }) {
+  const searchParams = useSearchParams();
+  const draftId = searchParams?.get("draftId");
+  
   const [data, setData] = useState<BillDraftData>(defaultData);
+  const [error, setError] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // CACHE LOAD: Async fix to prevent cascading renders!
+  // 1. DATABASE LOAD: Hydrate from API
   useEffect(() => {
     const loadDraft = async () => {
-      const savedDraft = localStorage.getItem("haseeb_bill_draft");
-      if (savedDraft) {
+      // Prioritize loading the draft from the DB if draftId is present
+      if (draftId) {
         try {
-          setData(JSON.parse(savedDraft));
+          const res = await fetch(`/api/bills/${draftId}`);
+          if (res.ok) {
+            const dbDraft = await res.json();
+            // Handle populated client vs raw clientId
+            const clientId = dbDraft.client?._id || dbDraft.client || "";
+            const clientName = dbDraft.client?.name || "";
+            
+            setData({
+              ...defaultData,
+              ...dbDraft,
+              clientId,
+              clientName,
+            });
+            setIsLoaded(true);
+            return;
+          }
         } catch (err) {
-          console.error("Failed to load draft from cache", err);
+          console.error("Failed to load draft from database", err);
         }
+      }
+      
+      // Fallback checkout local storage if no draftId
+      if (!draftId) {
+          const savedDraft = localStorage.getItem("haseeb_bill_draft");
+          if (savedDraft) {
+            try {
+              setData(JSON.parse(savedDraft));
+            } catch (err) {
+              console.error("Failed to load draft from cache", err);
+            }
+          }
       }
       setIsLoaded(true);
     };
 
     loadDraft();
-  }, []);
+  }, [draftId]);
 
-  // CACHE SAVE: Run every time 'data' changes
+  // 2. DATABASE AUTO-SAVE ENGINE 
   useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem("haseeb_bill_draft", JSON.stringify(data));
+    // Only auto-save if we are loaded, and we have an actionable state
+    if (!isLoaded || (data.status !== "Draft" && !data._id && !draftId)) {
+        // We preserve local storage for pure clientside sessions just in case
+        if (isLoaded) localStorage.setItem("haseeb_bill_draft", JSON.stringify(data));
+        return;
     }
-  }, [data, isLoaded]);
 
-  // 1. Master Update Function
+    const saveDraftTimer = setTimeout(async () => {
+      try {
+        const payload: Partial<BillDraftData> & { client?: string } = { ...data };
+        
+        // Mongo map fields appropriately
+        if (payload.clientId) {
+            payload.client = payload.clientId;
+        } else {
+             delete payload.client; // Strip client if empty to prevent MongoDB cast errors
+        }
+
+        const res = await fetch(`/api/bills`, {
+          method: "POST", // The route handles upsert automatically
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        
+        if (res.ok) {
+            setError(null);
+            const updatedDbRecord: BillServerResponse = await res.json();
+            
+            setData(prev => {
+                // Safely merge math fields without overwriting user's active keystrokes
+                const safeItems = prev.items.map(prevItem => {
+                    const serverItem = updatedDbRecord.items?.find((si) => si.id === prevItem.id || si._id === prevItem._id);
+                    if (!serverItem) return prevItem;
+                    return {
+                        ...prevItem,
+                        amount: serverItem.amount,
+                        taxes: serverItem.taxes,
+                    };
+                });
+
+                return {
+                    ...prev,
+                    _id: updatedDbRecord._id,
+                    items: safeItems,
+                    baseAmount: updatedDbRecord.baseAmount,
+                    taxAmount: updatedDbRecord.taxAmount,
+                    amount: updatedDbRecord.amount
+                };
+            });
+
+            if (!data._id && updatedDbRecord._id && !draftId) {
+                window.history.replaceState(null, '', `?draftId=${updatedDbRecord._id}`);
+            }
+        } else {
+            const errorData = await res.json();
+            setError(errorData.error || "Failed to auto-save");
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Network error during auto-save");
+        console.error("Auto-save failed", err);
+      }
+    }, 1200); // 1.2 second debounce
+    
+    return () => clearTimeout(saveDraftTimer);
+  }, [data, isLoaded, draftId]);
+
+  // 3. Master Update Function
   const updateData = (updates: Partial<BillDraftData>) => {
     setData((prev) => ({ ...prev, ...updates }));
   };
 
-  // 2. Line Item Management
+  // 4. Line Item Management
   const addItem = (item: LineItem) => {
     setData((prev) => ({ ...prev, items: [...prev.items, item] }));
   };
@@ -110,17 +225,6 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
         if (item.id !== id) return item;
 
         const updatedItem = { ...item, ...updates };
-
-        // Automatically recalculate taxes if quantity or unitPrice changed
-        if (updatedItem.taxes && updatedItem.taxes.length > 0) {
-          const newBase = updatedItem.quantity * updatedItem.unitPrice;
-          updatedItem.taxes = updatedItem.taxes.map(t => ({
-            ...t,
-            baseAmount: newBase,
-            amount: (newBase * t.percentage) / 100
-          }));
-        }
-
         return updatedItem;
       }),
     }));
@@ -130,21 +234,15 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
     setData((prev) => ({ ...prev, items: prev.items.filter((item) => item.id !== id) }));
   };
 
-  // 3. Tax Mathematics
+  // 5. Tax Mathematics
   const applyTaxesToItems = (taxes: TaxCharge[]) => {
     setData((prev) => {
-      const subtotal = prev.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-      if (subtotal === 0) return prev;
-
       const updatedItems = prev.items.map((item) => {
-        const itemAmount = item.quantity * item.unitPrice;
-        const proportion = itemAmount / subtotal;
-
         const itemTaxes: TaxCharge[] = taxes.map((tax) => ({
           name: tax.name,
           percentage: tax.percentage,
-          baseAmount: tax.baseAmount * proportion,
-          amount: tax.amount * proportion,
+          baseAmount: 0, // Backend will calculate this
+          amount: 0,     // Backend will calculate this
         }));
 
         return { ...item, taxes: itemTaxes };
@@ -154,9 +252,9 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  // 4. Reset & Clear Cache
+  // 6. Reset & Clear Cache
   const resetDraft = () => {
-    setData(defaultData);
+    setData({ ...defaultData, _id: draftId || undefined });
     localStorage.removeItem("haseeb_bill_draft");
   };
 
@@ -165,7 +263,7 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
 
   return (
     <BillDraftContext.Provider
-      value={{ data, updateData, addItem, updateItem, removeItem, applyTaxesToItems, resetDraft }}
+      value={{ data, error, updateData, addItem, updateItem, removeItem, applyTaxesToItems, resetDraft }}
     >
       {children}
     </BillDraftContext.Provider>
