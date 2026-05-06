@@ -50,21 +50,33 @@ export function parseAmt(val: string | number | undefined | null): number {
 export function getBaseAmount(bill: BillType): number {
   const directTotals = [bill.baseAmount, bill.amount, bill.subTotal, bill.totalAmount, bill.netAmount, bill.total];
   for (const t of directTotals) {
-    const val = parseAmt(t);
-    if (val > 0) return val;
+    if (t !== undefined && t !== null && t !== "") {
+      const val = parseAmt(t);
+      if (!isNaN(val)) return val;
+    }
   }
 
   if (Array.isArray(bill.items) && bill.items.length > 0) {
     let sum = 0;
     bill.items.forEach((item) => {
-      const itemTotal = parseAmt(item.amount) || parseAmt(item.total) || ( (parseAmt(item.quantity) || 1) * parseAmt(item.price || item.unitPrice || item.rate) );
+      let itemTotal = 0;
+      if (item.amount !== undefined && item.amount !== null && item.amount !== "") {
+        itemTotal = parseAmt(item.amount);
+      } else if (item.total !== undefined && item.total !== null && item.total !== "") {
+        itemTotal = parseAmt(item.total);
+      } else {
+        const qty = (item.quantity !== undefined && item.quantity !== null && item.quantity !== "") ? parseAmt(item.quantity) : 1;
+        const prc = parseAmt(item.price ?? item.unitPrice ?? item.rate);
+        itemTotal = qty * prc;
+      }
       sum += itemTotal;
     });
-    if (sum > 0) return sum;
+    return sum;
   }
 
-  const flat = (parseAmt(bill.quantity) || 1) * parseAmt(bill.unitPrice || bill.price);
-  return flat > 0 ? flat : 0;
+  const qty = (bill.quantity !== undefined && bill.quantity !== null && bill.quantity !== "") ? parseAmt(bill.quantity) : 1;
+  const prc = parseAmt(bill.unitPrice ?? bill.price);
+  return qty * prc;
 }
 
 // Add these to the BOTTOM of lib/summary-helpers.ts

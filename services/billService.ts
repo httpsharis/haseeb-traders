@@ -14,9 +14,20 @@ function calculateBillTotals(items: LineItem[] = []) {
 
   const processedItems = items.map(item => {
     // 1. Calculate Item Base (Qty * Price) safely
-    const qty = new Decimal(item.quantity || 0);
-    const price = new Decimal(item.unitPrice || 0);
-    const itemBase = qty.mul(price);
+    const qtyVal = item.quantity !== undefined && item.quantity !== null ? item.quantity : 1;
+    const qty = new Decimal(qtyVal);
+    
+    // Support either unitPrice or price
+    const unitPriceVal = item.unitPrice !== undefined && item.unitPrice !== null ? item.unitPrice : 0;
+    const priceVal = (unitPriceVal === 0 && (item as any).price !== undefined && (item as any).price !== null) ? (item as any).price : unitPriceVal;
+    const price = new Decimal(priceVal);
+    
+    let itemBase = qty.mul(price);
+    
+    // Fallback: if calculated itemBase is 0 but explicit amount was provided, use that amount
+    if (itemBase.toNumber() === 0 && item.amount !== undefined && item.amount !== null) {
+      itemBase = new Decimal(item.amount);
+    }
 
     masterBaseAmount = masterBaseAmount.add(itemBase);
 
@@ -56,16 +67,16 @@ function calculateBillTotals(items: LineItem[] = []) {
 
 // ── Create a new bill ───────────────────────────────────
 export async function createBillService(data: Partial<Bill>) {
-  // Run the math engine before saving to the database
-  const totals = calculateBillTotals(data.items || []);
+  const payload = { ...data };
 
-  const payload = {
-    ...data,
-    items: totals.processedItems,
-    baseAmount: totals.baseAmount,
-    taxAmount: totals.taxAmount,
-    amount: totals.amount
-  };
+  // Only run the math engine if items are actually provided
+  if (data.items && data.items.length > 0) {
+    const totals = calculateBillTotals(data.items);
+    payload.items = totals.processedItems;
+    payload.baseAmount = totals.baseAmount;
+    payload.taxAmount = totals.taxAmount;
+    payload.amount = totals.amount;
+  }
 
   return await billModel.create(payload);
 }

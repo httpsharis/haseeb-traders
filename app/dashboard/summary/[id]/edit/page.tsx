@@ -68,10 +68,14 @@ function parseAmt(val: string | number | undefined | null): number {
 function getBaseAmount(bill: BillType): number {
     const directTotals = [bill.baseAmount, bill.amount, bill.subTotal, bill.totalAmount];
     for (const t of directTotals) {
-        const val = parseAmt(t as string | number);
-        if (val > 0) return val;
+        if (t !== undefined && t !== null && t !== "") {
+            const val = parseAmt(t as string | number);
+            if (!isNaN(val)) return val;
+        }
     }
-    return (parseAmt(bill.quantity) || 1) * parseAmt(bill.unitPrice || bill.price) || 0;
+    const qty = (bill.quantity !== undefined && bill.quantity !== null && bill.quantity !== "") ? parseAmt(bill.quantity) : 1;
+    const prc = parseAmt(bill.unitPrice || bill.price);
+    return qty * prc;
 }
 
 function generateId() { return Math.random().toString(36).substring(2, 9); }

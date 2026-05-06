@@ -53,10 +53,14 @@ export function SummaryPrintDocument({
     const getBaseAmount = (bill: BillType): number => {
         const directTotals = [bill.baseAmount, bill.amount, bill.subTotal, bill.totalAmount];
         for (const t of directTotals) {
-            const val = Number(t?.toString().replace(/,/g, ""));
-            if (val > 0) return val;
+            if (t !== undefined && t !== null && t !== "") {
+                const val = Number(t.toString().replace(/,/g, ""));
+                if (!isNaN(val)) return val;
+            }
         }
-        return (Number(bill.quantity) || 1) * Number(bill.unitPrice || bill.price) || 0;
+        const qty = (bill.quantity !== undefined && bill.quantity !== null && bill.quantity !== "") ? Number(bill.quantity) : 1;
+        const prc = Number(bill.unitPrice || bill.price || 0);
+        return qty * prc;
     };
 
     const getRowData = (bill: BillType) => {

@@ -168,32 +168,16 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
         
         if (res.ok) {
             setError(null);
-            const updatedDbRecord: BillServerResponse = await res.json();
+            const updatedDbRecord = await res.json();
             
-            setData(prev => {
-                // Safely merge math fields without overwriting user's active keystrokes
-                const safeItems = prev.items.map(prevItem => {
-                    const serverItem = updatedDbRecord.items?.find((si) => si.id === prevItem.id || si._id === prevItem._id);
-                    if (!serverItem) return prevItem;
-                    return {
-                        ...prevItem,
-                        amount: serverItem.amount,
-                        taxes: serverItem.taxes,
-                    };
-                });
-
-                return {
-                    ...prev,
-                    _id: updatedDbRecord._id,
-                    items: safeItems,
-                    baseAmount: updatedDbRecord.baseAmount,
-                    taxAmount: updatedDbRecord.taxAmount,
-                    amount: updatedDbRecord.amount
-                };
-            });
-
-            if (!data._id && updatedDbRecord._id && !draftId) {
-                window.history.replaceState(null, '', `?draftId=${updatedDbRecord._id}`);
+            // Only update state if this is the VERY FIRST save (to grab the new MongoDB _id)
+            if (!data._id && updatedDbRecord._id) {
+                setData((prev) => ({ ...prev, _id: updatedDbRecord._id }));
+                
+                // Update the URL so the user doesn't lose the draft on refresh
+                if (!draftId) {
+                    window.history.replaceState(null, '', `?draftId=${updatedDbRecord._id}`);
+                }
             }
         } else {
             const errorData = await res.json();

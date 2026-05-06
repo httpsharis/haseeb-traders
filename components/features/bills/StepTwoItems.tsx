@@ -247,10 +247,9 @@ function LineItemsTable() {
 // SUB-COMPONENT 2: LiveDraftSidebar
 // ============================================================================
 function LiveDraftSidebar() {
-    const router = useRouter(); // ✅ Make sure this is defined!
+    const router = useRouter(); 
     const { data, error } = useBillDraft();
 
-    // ✅ FIXED MATH: Now fully relying on the backend single source of truth
     const baseAmount = data.baseAmount || 0;
     const gstAmount = data.taxAmount || 0;
     const grandTotal = data.amount || 0;
