@@ -17,17 +17,22 @@ jobs:
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
       - name: 📦 Install Dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: 🔍 Run Linter
-        run: npm run lint
+        run: pnpm run lint
 
       - name: 🔨 Test Production Build
-        run: npm run build
+        run: pnpm run build
         env:
           NEXTAUTH_URL: http://localhost:3000
           NEXTAUTH_SECRET: dummy_secret_for_ci
