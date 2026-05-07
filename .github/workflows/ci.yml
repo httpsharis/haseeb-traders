@@ -17,20 +17,16 @@ jobs:
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          package-manager-cache: false
-
-      - name: 🚀 Install pnpm
-        run: npm install -g pnpm
+          node-version: '20'
 
       - name: 📦 Install Dependencies
-        run: pnpm install
+        run: npx pnpm install
 
       - name: 🔍 Run Linter
-        run: pnpm run lint
+        run: npx pnpm run lint
 
       - name: 🔨 Test Production Build
-        run: pnpm run build
+        run: npx pnpm run build
         env:
           NEXTAUTH_URL: http://localhost:3000
           NEXTAUTH_SECRET: dummy_secret_for_ci
