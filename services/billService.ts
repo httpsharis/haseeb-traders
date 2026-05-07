@@ -19,7 +19,8 @@ function calculateBillTotals(items: LineItem[] = []) {
     
     // Support either unitPrice or price
     const unitPriceVal = item.unitPrice !== undefined && item.unitPrice !== null ? item.unitPrice : 0;
-    const priceVal = (unitPriceVal === 0 && (item as any).price !== undefined && (item as any).price !== null) ? (item as any).price : unitPriceVal;
+    const itemWithPrice = item as LineItem & { price?: number };
+    const priceVal = (unitPriceVal === 0 && itemWithPrice.price !== undefined && itemWithPrice.price !== null) ? itemWithPrice.price : unitPriceVal;
     const price = new Decimal(priceVal);
     
     let itemBase = qty.mul(price);
