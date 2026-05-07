@@ -83,6 +83,33 @@ const defaultData: BillDraftData = {
   amount: 0,
 };
 
+function calculateTotals(items: LineItem[]) {
+  let baseAmount = 0;
+  let taxAmount = 0;
+
+  items.forEach(item => {
+    const qty = item.quantity !== undefined && item.quantity !== null ? item.quantity : 1;
+    const price = item.unitPrice || 0;
+    const itemBase = qty * price;
+    baseAmount += itemBase;
+
+    let itemTaxTotal = 0;
+    if (item.taxes && item.taxes.length > 0) {
+      item.taxes.forEach(tax => {
+        const percentage = tax.percentage || 0;
+        itemTaxTotal += (itemBase * percentage) / 100;
+      });
+    }
+    taxAmount += itemTaxTotal;
+  });
+
+  return {
+    baseAmount,
+    taxAmount,
+    amount: baseAmount + taxAmount
+  };
+}
+
 // ============================================================================
 // CONTEXT ENGINE
 // ============================================================================
@@ -170,14 +197,24 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
             setError(null);
             const updatedDbRecord = await res.json();
             
-            // Only update state if this is the VERY FIRST save (to grab the new MongoDB _id)
-            if (!data._id && updatedDbRecord._id) {
-                setData((prev) => ({ ...prev, _id: updatedDbRecord._id }));
-                
-                // Update the URL so the user doesn't lose the draft on refresh
-                if (!draftId) {
-                    window.history.replaceState(null, '', `?draftId=${updatedDbRecord._id}`);
+            // Sync ID and totals from DB response
+            setData((prev) => {
+                const next = { ...prev };
+                if (!prev._id && updatedDbRecord._id) {
+                    next._id = updatedDbRecord._id;
                 }
+                
+                // Sync calculations from backend to ensure accuracy
+                if (updatedDbRecord.baseAmount !== undefined) next.baseAmount = updatedDbRecord.baseAmount;
+                if (updatedDbRecord.taxAmount !== undefined) next.taxAmount = updatedDbRecord.taxAmount;
+                if (updatedDbRecord.amount !== undefined) next.amount = updatedDbRecord.amount;
+                
+                return next;
+            });
+            
+            // Update the URL so the user doesn't lose the draft on refresh
+            if (!data._id && updatedDbRecord._id && !draftId) {
+                window.history.replaceState(null, '', `?draftId=${updatedDbRecord._id}`);
             }
         } else {
             const errorData = await res.json();
@@ -194,28 +231,38 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
 
   // 3. Master Update Function
   const updateData = (updates: Partial<BillDraftData>) => {
-    setData((prev) => ({ ...prev, ...updates }));
+    setData((prev) => {
+      const next = { ...prev, ...updates };
+      if (updates.items) {
+        Object.assign(next, calculateTotals(next.items));
+      }
+      return next;
+    });
   };
 
   // 4. Line Item Management
   const addItem = (item: LineItem) => {
-    setData((prev) => ({ ...prev, items: [...prev.items, item] }));
+    setData((prev) => {
+      const newItems = [...prev.items, item];
+      return { ...prev, items: newItems, ...calculateTotals(newItems) };
+    });
   };
 
   const updateItem = (id: string, updates: Partial<LineItem>) => {
-    setData((prev) => ({
-      ...prev,
-      items: prev.items.map((item) => {
+    setData((prev) => {
+      const newItems = prev.items.map((item) => {
         if (item.id !== id) return item;
-
-        const updatedItem = { ...item, ...updates };
-        return updatedItem;
-      }),
-    }));
+        return { ...item, ...updates };
+      });
+      return { ...prev, items: newItems, ...calculateTotals(newItems) };
+    });
   };
 
   const removeItem = (id: string) => {
-    setData((prev) => ({ ...prev, items: prev.items.filter((item) => item.id !== id) }));
+    setData((prev) => {
+      const newItems = prev.items.filter((item) => item.id !== id);
+      return { ...prev, items: newItems, ...calculateTotals(newItems) };
+    });
   };
 
   // 5. Tax Mathematics
@@ -232,7 +279,7 @@ export function BillDraftProvider({ children }: { children: ReactNode }) {
         return { ...item, taxes: itemTaxes };
       });
 
-      return { ...prev, items: updatedItems, summaryTaxes: taxes };
+      return { ...prev, items: updatedItems, summaryTaxes: taxes, ...calculateTotals(updatedItems) };
     });
   };
 

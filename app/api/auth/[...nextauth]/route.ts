@@ -11,4 +11,13 @@ const handler = NextAuth({
   secret: process.env.NEXTAUTH_SECRET,
 });
 
-export { handler as GET, handler as POST };
+// Fix for Next.js 15+: await params before passing to next-auth
+export async function GET(req: any, context: any) {
+  const params = await context.params;
+  return handler(req, { ...context, params });
+}
+
+export async function POST(req: any, context: any) {
+  const params = await context.params;
+  return handler(req, { ...context, params });
+}

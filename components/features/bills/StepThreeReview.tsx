@@ -84,7 +84,7 @@ function PrintLayout({ docType, printFormat }: PrintLayoutProps) {
     const isLetterhead = printFormat === "LETTERHEAD";
 
     return (
-        <div className={`bg-white rounded-xl shadow-xl border border-stone-200 overflow-hidden print:shadow-none print:border-none print:m-0 print:p-0 ${isLetterhead ? 'print:pt-48' : ''}`}>
+        <div className={`bg-white rounded-xl shadow-xl border border-stone-200 overflow-hidden print:shadow-none print:border-none print:m-0 print:p-0`}>
             
             {/* Digital Context Bar (Always hidden on physical print) */}
             <div className="bg-stone-50 border-b border-stone-100 px-6 py-3 flex justify-between items-center print:hidden">
@@ -92,98 +92,120 @@ function PrintLayout({ docType, printFormat }: PrintLayoutProps) {
                 <span className="text-xs font-medium text-stone-500">{printFormat} FORMAT</span>
             </div>
 
+            {/* --- AGGRESSIVE PRINT CSS OVERRIDE --- */}
+            <style dangerouslySetInnerHTML={{ __html: `
+                @media print { 
+                    @page { size: portrait; margin: 0mm !important; }
+                    body * { visibility: hidden; }
+                    #print-wrapper, #print-wrapper * { visibility: visible; }
+                    #print-wrapper { 
+                        position: absolute; left: 0; top: 0; width: 100vw; height: 100vh;
+                        padding: 10mm; padding-top: ${isLetterhead ? '50mm' : '25mm'}; margin: 0; border: none !important;
+                        box-shadow: none !important; background: white !important; border-radius: 0 !important;
+                    }
+                    html, body, main { background: white !important; }
+                    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                }
+            ` }} />
+
             {/* The Actual Paper Document */}
-            <div className="p-8 sm:p-12 bg-white">
+            <div id="print-wrapper" className="p-8 sm:p-12 bg-white text-black font-sans text-[13px] leading-tight">
                 
                 {/* HEADER: Hidden if printing on a physical letterhead pad */}
-                <div className={`flex justify-between items-start mb-16 ${isLetterhead ? 'print:hidden' : ''}`}>
-                    <div>
-                        <h2 className="text-2xl font-black text-stone-900 tracking-tight">Haseeb Traders</h2>
-                        <p className="mt-1 text-sm text-stone-500 font-medium leading-relaxed">
-                            Main Business Market<br />
-                            Multan, Pakistan
-                        </p>
-                    </div>
-                    <div className="text-right">
-                        <h1 className="text-4xl font-black tracking-widest text-stone-200 uppercase">{docType}</h1>
-                        <p className="mt-4 text-sm font-bold text-stone-900">
-                            {docType === "INVOICE" ? "Invoice No." : "Bill No."} {data.summaryNumber}
-                        </p>
-                        <p className="text-sm text-stone-500 font-medium">Date: {data.date}</p>
+                <div className={`border-b-2 border-black pb-4 mb-6 ${isLetterhead ? 'print:hidden' : ''}`}>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h2 className="text-3xl font-black text-black tracking-tight">Haseeb Traders</h2>
+                            <p className="mt-1 text-sm text-black font-medium leading-relaxed">
+                                Main Business Market<br />
+                                Multan, Pakistan
+                            </p>
+                        </div>
+                        <div className="text-right">
+                            <h1 className="text-4xl font-black tracking-widest text-black uppercase">{docType}</h1>
+                            <div className="mt-4 flex border-2 border-black text-[12px] font-bold bg-white inline-flex">
+                                <div className="px-3 py-1.5 border-r-2 border-black uppercase tracking-wider">{docType === "INVOICE" ? "Invoice No." : "Bill No."}</div>
+                                <div className="px-3 py-1.5 border-r-2 border-black">{data.summaryNumber || "PENDING"}</div>
+                                <div className="px-3 py-1.5 border-r-2 border-black uppercase tracking-wider">Dated</div>
+                                <div className="px-3 py-1.5">{data.date}</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 {/* If Letterhead, we still need to show the Bill No and Date since the header is hidden */}
                 {isLetterhead && (
-                    <div className="hidden print:flex justify-between items-end mb-12 border-b border-stone-200 pb-4">
+                    <div className="hidden print:flex justify-between items-end mb-6 border-b-2 border-black pb-4">
                         <div>
-                            <h1 className="text-3xl font-black tracking-widest text-stone-900 uppercase">{docType}</h1>
+                            <h1 className="text-3xl font-black tracking-widest text-black uppercase">{docType}</h1>
                         </div>
-                        <div className="text-right text-sm">
-                            <p className="font-bold text-stone-900">{docType === "INVOICE" ? "Invoice No." : "Bill No."} {data.summaryNumber}</p>
-                            <p className="text-stone-500 font-medium">Date: {data.date}</p>
+                        <div className="mt-4 flex border-2 border-black text-[12px] font-bold bg-white inline-flex">
+                            <div className="px-3 py-1.5 border-r-2 border-black uppercase tracking-wider">{docType === "INVOICE" ? "Invoice No." : "Bill No."}</div>
+                            <div className="px-3 py-1.5 border-r-2 border-black">{data.summaryNumber || "PENDING"}</div>
+                            <div className="px-3 py-1.5 border-r-2 border-black uppercase tracking-wider">Dated</div>
+                            <div className="px-3 py-1.5">{data.date}</div>
                         </div>
                     </div>
                 )}
 
-                <div className="mb-12">
-                    <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-2 border-b border-stone-100 pb-2 inline-block">Billed To</p>
-                    <p className="text-lg font-black text-stone-900">{data.clientName}</p>
+                <div className="mb-6 text-sm">
+                    <h3 className="mb-2 text-[10px] font-bold uppercase tracking-widest text-black border-b border-black pb-2 inline-block">Billed To</h3>
+                    <p className="font-black text-xl text-black">{data.clientName}</p>
                 </div>
 
                 {/* THE TABLE */}
-                <table className="w-full text-sm mb-12 border-collapse">
-                    <thead>
-                        <tr className="border-b-2 border-stone-900 text-left">
-                            <th className="py-3 font-bold uppercase tracking-widest text-stone-900 text-[10px] text-left">Description</th>
-                            <th className="py-3 text-right font-bold uppercase tracking-widest text-stone-900 text-[10px] w-24">Qty</th>
-                            <th className="py-3 text-right font-bold uppercase tracking-widest text-stone-900 text-[10px] w-32">Unit Price</th>
-                            <th className="py-3 text-right font-bold uppercase tracking-widest text-stone-900 text-[10px] w-32">Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stone-100">
-                        {data.items.map((item: LineItem, idx: number) => (
-                            <tr key={idx} className="even:bg-stone-50/50">
-                                <td className="py-4">
-                                    <p className="font-bold text-stone-900">{item.description}</p>
-                                    <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest mt-1">{item.category}</p>
-                                </td>
-                                <td className="py-4 text-right text-stone-700 font-medium">{item.quantity}</td>
-                                <td className="py-4 text-right text-stone-700 font-medium">{formatMoney(item.unitPrice)}</td>
-                                <td className="py-4 text-right font-black text-stone-900">{formatMoney(item.quantity * item.unitPrice)}</td>
+                <div className="mb-6">
+                    <table className="w-full border-collapse text-center border-2 border-black bg-white">
+                        <thead className="border-b-2 border-black">
+                            <tr className="divide-x-2 divide-black">
+                                <th className="py-3 w-12 text-[11px] font-black uppercase text-black">Sr</th>
+                                <th className="py-3 px-4 text-left text-[11px] font-black uppercase text-black">Description</th>
+                                <th className="py-3 w-24 text-[11px] font-black uppercase text-black">Qty</th>
+                                <th className="py-3 w-32 text-[11px] font-black uppercase text-black">Unit Price</th>
+                                <th className="py-3 w-32 text-[11px] font-black uppercase text-black">Amount</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-
-                {/* TOTALS */}
-                <div className="flex justify-end mb-16">
-                    <div className="w-72 space-y-4 text-sm">
-                        <div className="flex justify-between items-center text-stone-600">
-                            <span className="font-medium">Subtotal</span>
-                            <span className="font-black text-stone-900">{formatMoney(computedSubtotal)}</span>
-                        </div>
-                        {gstAmount > 0 && (
-                            <div className="flex justify-between items-center text-stone-600">
-                                <span className="font-medium">GST</span>
-                                <span className="font-black text-stone-900">{formatMoney(gstAmount)}</span>
-                            </div>
-                        )}
-                        <div className="flex justify-between items-center border-t-2 border-stone-900 pt-4 text-lg font-black text-stone-900">
-                            <span className="uppercase text-[10px] tracking-widest text-stone-500">Total Payment</span>
-                            <span>Rs {formatMoney(grandTotal)}</span>
-                        </div>
-                    </div>
+                        </thead>
+                        <tbody className="divide-y border-b-2 border-black divide-black">
+                            {data.items.map((item: LineItem, idx: number) => (
+                                <tr key={idx} className="divide-x-2 divide-black print:hover:bg-white hover:bg-slate-50 transition-colors">
+                                    <td className="py-3 px-2 text-black font-medium">{String(idx + 1).padStart(2, '0')}</td>
+                                    <td className="py-3 px-4 text-left">
+                                        <p className="font-bold text-black">{item.description}</p>
+                                        <p className="text-[10px] text-black font-bold uppercase tracking-widest mt-1">{item.category}</p>
+                                    </td>
+                                    <td className="py-3 px-2 font-bold text-black">{item.quantity}</td>
+                                    <td className="py-3 px-2 font-bold text-black">{formatMoney(item.unitPrice)}</td>
+                                    <td className="py-3 px-2 font-black text-black">{formatMoney(item.quantity * item.unitPrice)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                        <tfoot className="font-black divide-x-2 divide-black border-t-2 border-black bg-stone-50">
+                            <tr>
+                                <td colSpan={4} className="py-3 text-right pr-4 text-[12px] uppercase tracking-widest text-black">Subtotal</td>
+                                <td className="py-3 text-[13px] text-black">{formatMoney(computedSubtotal)}</td>
+                            </tr>
+                            {gstAmount > 0 && (
+                                <tr className="border-t-2 border-black">
+                                    <td colSpan={4} className="py-3 text-right pr-4 text-[12px] uppercase tracking-widest text-black">Total GST</td>
+                                    <td className="py-3 text-[13px] text-black">{formatMoney(gstAmount)}</td>
+                                </tr>
+                            )}
+                            <tr className="border-t-2 border-black bg-white">
+                                <td colSpan={4} className="py-3 text-right pr-4 text-[12px] uppercase tracking-widest text-black">Total Payment</td>
+                                <td className="py-3 text-[15px] font-black text-black">Rs {formatMoney(grandTotal)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
                 </div>
 
                 {/* FOOTER */}
-                <div className="pt-8 border-t border-stone-200 text-center flex justify-between items-end">
-                    <p className="text-[10px] font-bold tracking-widest text-stone-400 uppercase">
+                <div className="mt-12 pt-4 border-t-2 border-black flex justify-between items-end">
+                    <p className="text-[10px] font-bold tracking-widest text-black uppercase">
                         System Generated {docType} - Haseeb Traders
                     </p>
                     <div className="text-right">
-                        <p className="font-bold text-stone-500 text-[10px] uppercase tracking-widest">Authorized Signature</p>
-                        <div className="w-48 border-b-2 border-stone-800 mt-12 mb-1"></div>
+                        <p className="font-bold text-black text-[10px] uppercase tracking-widest">Authorized Signature</p>
+                        <div className="w-48 border-b-2 border-black mt-12 mb-1"></div>
                     </div>
                 </div>
             </div>
