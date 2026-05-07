@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import { NextRequest } from "next/server";
 
 const handler = NextAuth({
   providers: [
@@ -12,12 +13,12 @@ const handler = NextAuth({
 });
 
 // Fix for Next.js 15+: await params before passing to next-auth
-export async function GET(req: any, context: any) {
+export async function GET(req: NextRequest, context: { params: Promise<{ nextauth: string[] }> }) {
   const params = await context.params;
   return handler(req, { ...context, params });
 }
 
-export async function POST(req: any, context: any) {
+export async function POST(req: NextRequest, context: { params: Promise<{ nextauth: string[] }> }) {
   const params = await context.params;
   return handler(req, { ...context, params });
 }
